@@ -15,7 +15,7 @@ use Zend\Cache\Exception;
 use Zend\Stdlib\ArrayUtils;
 
 /**
- * This is a resource manager for mongo
+ * This is a resource manager for MongoDB
  */
 class MongoDBResourceManager
 {
@@ -25,6 +25,33 @@ class MongoDBResourceManager
      * @var array
      */
     protected $resources = array();
+
+    /**
+     * Default client options.
+     *
+     * @var array
+     */
+    protected static $defaultClientOptions = array(
+        'servers' => array(
+            'host' => 'localhost',
+            'port' => 27017
+        ),
+        'replicaSet' => null,
+        'db' => 'cache',
+        'collection' => 'cache',
+        'connect' => true,
+        'connectTimeoutMS' => null,
+        'fsync' => null,
+        'journal' => null,
+        'username' => null,
+        'password' => null,
+        'readPreference' => null,
+        'readPreferenceTags' => null,
+        'socketTimeoutMS' => null,
+        'ssl' => null,
+        'w' => null,
+        'wTimeoutMS' => null
+    );
 
     /**
      * Check if a resource exists
@@ -50,19 +77,73 @@ class MongoDBResourceManager
             throw new Exception\RuntimeException("No resource with id '{$id}'");
         }
 
-        $resource = $this->resources[$id];
+        $resource = & $this->resources[$id];
 
-        if ($resource instanceof MongoDBResource) {
-            return $resource;
+        if ($resource['client'] instanceof MongoDBResource && $resource['initialized'] === true) {
+            return $resource['client'];
         }
 
-        $params = $this->buildConnectionParams($resource);
-        $mongoc = new MongoDBResource($params['server'], $params['options']);
+        $mongoc = $this->getMongoClient($resource);
+        $resource['initialized'] = true;
 
         // buffer and return
-        $this->resources[$id] = $mongoc;
+        $this->resources[$id]['client'] = $mongoc;
 
         return $mongoc;
+    }
+
+    /**
+     * Set a resource
+     *
+     * @param string $id
+     * @param array|Traversable|MongoDBResource $resource
+     * @return MongoDBResourceManager Fluent interface
+     * @throws Exception\InvalidArgumentException
+     */
+    public function setResource($id, $resource)
+    {
+        $id = (string) $id;
+
+        if (!($resource instanceof MongoDBResource)) {
+            if ($resource instanceof Traversable) {
+                $resource = ArrayUtils::iteratorToArray($resource);
+            } elseif (!is_array($resource)) {
+                throw new Exception\InvalidArgumentException(
+                    'Resource must be an instance of MongoClient or an array or Traversable'
+                );
+            }
+
+            $this->resources[$id]['initialized'] = false;
+
+            foreach (static::$defaultClientOptions as $key => $value) {
+                if (array_key_exists($key, $resource)) {
+                    $value = $resource[$key];
+                }
+
+                if (null !== $value) {
+                    $method = 'set' . ucfirst($key);
+                    $this->$method($id, $value);
+                }
+            }
+        } else {
+            $this->resources[$id]['initialized'] = true;
+            $this->resources[$id]['client'] = $resource;
+        }
+
+        return $this;
+    }
+
+    /**
+     * Remove a resource
+     *
+     * @param string $id
+     * @return MongoDBResourceManager Fluent interface
+     */
+    public function removeResource($id)
+    {
+        unset($this->resources[$id]);
+
+        return $this;
     }
 
     /**
@@ -71,19 +152,17 @@ class MongoDBResourceManager
      * @param array $resource
      * @return array
      */
-    protected function buildConnectionParams(array $resource)
+    protected function getMongoClient(array $resource)
     {
-        $uri = 'mongodb://';
+        $proto = 'mongodb://';
+        $uri = null;
 
         foreach ($resource['servers'] as $server) {
-            $uri .= $server['host'] . ':' . $server['port'];
+            $host = $server['host'] . ':' . $server['port'];
+            $uri .= ($uri != null) ? ',' . $host : $proto . $host;
         }
 
-        if (isset($resource['replSetName'])) {
-            $resource['options']['replicaSet'] = $resource['replSetName'];
-        }
-
-        return array('server' => $uri, 'options' => $resource['options']);
+        return new MongoDBResource($uri, $resource['client_options']);
     }
 
     /**
@@ -105,6 +184,13 @@ class MongoDBResourceManager
                     'servers' => $servers
                 ));
         }
+
+        // normalize and validate params
+        $this->normalizeServers($servers);
+
+        $resource = & $this->resources[$id];
+        $resource['servers']     = $servers;
+        $resource['initialized'] = false;
 
         return $this;
     }
@@ -134,98 +220,446 @@ class MongoDBResourceManager
         return $resource['servers'];
     }
 
-    public function setReplicaSet($replSetName)
-    {
-
-    }
-
-    public function getReplicaSet($id)
-    {
-
-    }
-
-    public function setDatabase($dbName)
-    {
-
-    }
-
-    public function getDatabase($id)
-    {
-
-    }
-
-    public function setCollection($collName)
-    {
-
-    }
-
-    public function getCollection($id)
-    {
-
-    }
-
     /**
-     * Set a resource
-     *
-     * @param string $id
-     * @param array|Traversable|MongoDBResource $resource
-     * @return MongoDBResourceManager Fluent interface
-     * @throws Exception\InvalidArgumentException
+     * @param $id
+     * @param $replicaSet
+     * @return $this|MongoDBResourceManager
      */
-    public function setResource($id, $resource)
+    public function setReplicaSet($id, $replicaSet)
     {
-        $id = (string) $id;
-
-        if (!($resource instanceof MongoDBResource)) {
-            if ($resource instanceof Traversable) {
-                $resource = ArrayUtils::iteratorToArray($resource);
-            } elseif (!is_array($resource)) {
-                throw new Exception\InvalidArgumentException(
-                    'Resource must be an instance of MongoClient or an array or Traversable'
-                );
-            }
-
-            $resource = array_merge(
-                array(
-                    'servers' => array(),
-                    'options' => array()
-                ),
-                $resource
-            );
-
-            // normalize and validate params
-            $this->normalizeServers($resource['servers']);
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'replicaSet' => $replicaSet,
+                ));
         }
 
-        $this->resources[$id] = $resource;
+        $this->setClientOption($id, 'replicaSet', $replicaSet);
 
         return $this;
     }
 
     /**
-     * Remove a resource
-     *
-     * @param string $id
-     * @return MongoDBResourceManager Fluent interface
+     * @param $id
+     * @return mixed
      */
-    public function removeResource($id)
+    public function getReplicaSet($id)
     {
-        unset($this->resources[$id]);
+        return $this->getClientOption($id, 'replicaSet');
+    }
+
+    /**
+     * @param $id
+     * @param $db
+     * @return $this|MongoDBResourceManager
+     */
+    public function setDB($id, $db)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'db' => $db,
+                ));
+        }
+
+        $this->setClientOption($id, 'db', $db);
 
         return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getDB($id)
+    {
+        return $this->getClientOption($id, 'db');
+    }
+
+    /**
+     * @param $id
+     * @param $collection
+     * @return $this|MongoDBResourceManager
+     */
+    public function setCollection($id, $collection)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'collection' => $collection,
+                ));
+        }
+
+        $this->setClientOption($id, 'collection', $collection);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getCollection($id)
+    {
+        return $this->getClientOption($id, 'collection');
+    }
+
+    /**
+     * @param $id
+     * @param $connect
+     * @return $this|MongoDBResourceManager
+     */
+    public function setConnect($id, $connect)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'connect' => $connect,
+                ));
+        }
+
+        $this->setClientOption($id, 'connect', $connect);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getConnect($id)
+    {
+        return $this->getClientOption($id, 'connect');
+    }
+
+    /**
+     * @param $id
+     * @param $connectTimeoutMS
+     * @return $this|MongoDBResourceManager
+     */
+    public function setConnectTimeoutMS($id, $connectTimeoutMS)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'connectTimeoutMS' => $connectTimeoutMS,
+                ));
+        }
+
+        $this->setClientOption($id, 'connectTimeoutMS', $connectTimeoutMS);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getConnectTimeoutMS($id)
+    {
+        return $this->getClientOption($id, 'connectTimeoutMS');
+    }
+
+    /**
+     * @param $id
+     * @param $fsync
+     * @return $this|MongoDBResourceManager
+     */
+    public function setFsync($id, $fsync)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'fsync' => $fsync,
+                ));
+        }
+
+        $this->setClientOption($id, 'fsync', $fsync);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getFsync($id)
+    {
+        return $this->getClientOption($id, 'fsync');
+    }
+
+    /**
+     * @param $id
+     * @param $journal
+     * @return $this|MongoDBResourceManager
+     */
+    public function setJournal($id, $journal)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'journal' => $journal,
+                ));
+        }
+
+        $this->setClientOption($id, 'journal', $journal);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getJournal($id)
+    {
+        return $this->getClientOption($id, 'journal');
+    }
+
+    /**
+     * @param $id
+     * @param $username
+     * @return $this|MongoDBResourceManager
+     */
+    public function setUsername($id, $username)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'username' => $username,
+                ));
+        }
+
+        $this->setClientOption($id, 'username', $username);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getUsername($id)
+    {
+        return $this->getClientOption($id, 'username');
+    }
+
+    /**
+     * @param $id
+     * @param $password
+     * @return $this|MongoDBResourceManager
+     */
+    public function setPassword($id, $password)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'password' => $password,
+                ));
+        }
+
+        $this->setClientOption($id, 'password', $password);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getPassword($id)
+    {
+        return $this->getClientOption($id, 'password');
+    }
+
+    /**
+     * @param $id
+     * @param $readPreference
+     * @return $this|MongoDBResourceManager
+     */
+    public function setReadPreference($id, $readPreference)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'readPreference' => $readPreference,
+                ));
+        }
+
+        $this->setClientOption($id, 'readPreference', $readPreference);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getReadPreference($id)
+    {
+        return $this->getClientOption($id, 'readPreference');
+    }
+
+    /**
+     * @param $id
+     * @param $readPreferenceTags
+     * @return $this|MongoDBResourceManager
+     */
+    public function setReadPreferenceTags($id, $readPreferenceTags)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'readPreferenceTags' => $readPreferenceTags,
+                ));
+        }
+
+        $this->setClientOption($id, 'readPreferenceTags', $readPreferenceTags);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getReadPreferenceTags($id)
+    {
+        return $this->getClientOption($id, 'readPreferenceTags');
+    }
+
+    /**
+     * @param $id
+     * @param $socketTimeoutMS
+     * @return $this|MongoDBResourceManager
+     */
+    public function setSocketTimeoutMS($id, $socketTimeoutMS)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'socketTimeoutMS' => $socketTimeoutMS,
+                ));
+        }
+
+        $this->setClientOption($id, 'socketTimeoutMS', $socketTimeoutMS);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getSocketTimeoutMS($id)
+    {
+        return $this->getClientOption($id, 'socketTimeoutMS');
+    }
+
+    /**
+     * @param $id
+     * @param $ssl
+     * @return $this|MongoDBResourceManager
+     */
+    public function setSsl($id, $ssl)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'ssl' => $ssl,
+                ));
+        }
+
+        $this->setClientOption($id, 'ssl', $ssl);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getSsl($id)
+    {
+        return $this->getClientOption($id, 'ssl');
+    }
+
+    /**
+     * @param $id
+     * @param $w
+     * @return $this|MongoDBResourceManager
+     */
+    public function setW($id, $w)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'w' => $w,
+                ));
+        }
+
+        $this->setClientOption($id, 'w', $w);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getW($id)
+    {
+        return $this->getClientOption($id, 'w');
+    }
+
+    public function setWTimeoutMS($id, $wTimeoutMS)
+    {
+        if (!$this->hasResource($id)) {
+            return $this->setResource($id, array(
+                    'wTimeoutMS' => $wTimeoutMS,
+                ));
+        }
+
+        $this->setClientOption($id, 'wTimeoutMS', $wTimeoutMS);
+
+        return $this;
+    }
+
+    /**
+     * @param $id
+     * @return mixed
+     */
+    public function getWTimeoutMS($id)
+    {
+        return $this->getClientOption($id, 'wTimeoutMS');
+    }
+
+    /**
+     * @param $id
+     * @param $option
+     * @param $value
+     */
+    protected function setClientOption($id, $option, $value)
+    {
+        $resource = & $this->resources[$id];
+        $resource['client_options'][$option] = $value;
+        $resource['initialized'] = false;
+    }
+
+    /**
+     * @param $id
+     * @param $option
+     * @return mixed
+     * @throws \Zend\Cache\Exception\RuntimeException
+     */
+    protected function getClientOption($id, $option)
+    {
+        if (!$this->hasResource($id)) {
+            throw new Exception\RuntimeException("No resource with id '{$id}'");
+        }
+
+        $resource = & $this->resources[$id];
+
+        return $resource['client_options'][$option];
     }
 
     /**
      * Normalize a list of servers into the following format:
      * array(array('host' => <host>, 'port' => <port>)[, ...])
      *
-     * @param string|array $servers
+     * @param Traversable|array $servers
+     * @throws Exception\InvalidArgumentException
      */
     protected function normalizeServers(& $servers)
     {
         if (!is_array($servers) && !$servers instanceof Traversable) {
-            // Convert string into a list of servers
-            $servers = explode(',', $servers);
+            throw new Exception\InvalidArgumentException("Invalid servers given");
         }
 
         $result = array();
@@ -242,13 +676,13 @@ class MongoDBResourceManager
      * Normalize one server into the following format:
      * array('host' => <host>, 'port' => <port>)
      *
-     * @param string|array $server
+     * @param Traversable|array $server
      * @throws Exception\InvalidArgumentException
      */
     protected function normalizeServer(& $server)
     {
-        $host = 'localhost';
-        $port = 27017;
+        $host = static::$defaultClientOptions['servers']['host'];
+        $port = static::$defaultClientOptions['servers']['port'];
 
         // convert a single server into an array
         if ($server instanceof Traversable) {
@@ -273,25 +707,5 @@ class MongoDBResourceManager
             'host' => $host,
             'port' => $port,
         );
-    }
-
-    /**
-     * Compare 2 normalized server arrays
-     * (Compares only the host and the port)
-     *
-     * @param array $serverA
-     * @param array $serverB
-     * @return int
-     */
-    protected function compareServers(array $serverA, array $serverB)
-    {
-        $keyA = $serverA['host'] . ':' . $serverA['port'];
-        $keyB = $serverB['host'] . ':' . $serverB['port'];
-
-        if ($keyA === $keyB) {
-            return 0;
-        }
-
-        return $keyA > $keyB ? 1 : -1;
     }
 }

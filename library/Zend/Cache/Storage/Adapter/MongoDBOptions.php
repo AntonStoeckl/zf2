@@ -113,7 +113,7 @@ class MongoDBOptions extends AdapterOptions
 
     public function setReplicaSet($replSetName)
     {
-        $this->getResourceManager()->setServers($this->getResourceId(), $replSetName);
+        $this->getResourceManager()->setReplicaSet($this->getResourceId(), $replSetName);
     }
 
     public function getReplicaSet()

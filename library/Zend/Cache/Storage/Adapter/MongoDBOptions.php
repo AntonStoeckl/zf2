@@ -111,9 +111,11 @@ class MongoDBOptions extends AdapterOptions
         return $this->getResourceManager()->getServers($this->getResourceId());
     }
 
-    public function setReplicaSet($replSetName)
+    public function setReplicaSet($replicaSet)
     {
-        $this->getResourceManager()->setReplicaSet($this->getResourceId(), $replSetName);
+        $this->getResourceManager()->setReplicaSet($this->getResourceId(), $replicaSet);
+
+        return $this;
     }
 
     public function getReplicaSet()
@@ -121,19 +123,23 @@ class MongoDBOptions extends AdapterOptions
         return $this->getResourceManager()->getReplicaSet($this->getResourceId());
     }
 
-    public function setDatabase($dbName)
+    public function setDB($db)
     {
-        $this->getResourceManager()->setServers($this->getResourceId(), $dbName);
+        $this->getResourceManager()->setDB($this->getResourceId(), $db);
+
+        return $this;
     }
 
-    public function getDatabase()
+    public function getDB()
     {
-        return $this->getResourceManager()->getDatabase($this->getResourceId());
+        return $this->getResourceManager()->getDB($this->getResourceId());
     }
 
-    public function setCollection($collName)
+    public function setCollection($collection)
     {
-        $this->getResourceManager()->setServers($this->getResourceId(), $collName);
+        $this->getResourceManager()->setCollection($this->getResourceId(), $collection);
+
+        return $this;
     }
 
     public function getCollection()

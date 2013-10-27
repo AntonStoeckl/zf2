@@ -13,6 +13,7 @@ use MongoClient as MongoDBResource;
 use Traversable;
 use Zend\Cache\Exception;
 use Zend\Stdlib\ArrayUtils;
+use \Zend\Validator;
 
 /**
  * This is a resource manager for MongoDB
@@ -52,6 +53,11 @@ class MongoDBResourceManager
         'w' => null,
         'wTimeoutMS' => null
     );
+
+    /**
+     * @var array
+     */
+    protected $validators = array();
 
     /**
      * Check if a resource exists
@@ -121,9 +127,12 @@ class MongoDBResourceManager
                 }
 
                 if (null !== $value) {
-                    $method = 'set' . ucfirst($key);
-                    $this->$method($id, $value);
+                    $this->setClientOption($id, 'key', $value);
                 }
+            }
+
+            if (!empty($resource['servers'])) {
+                $this->setServersOption($id, $resource['servers']);
             }
         } else {
             $this->resources[$id]['initialized'] = true;
@@ -185,12 +194,8 @@ class MongoDBResourceManager
                 ));
         }
 
-        // normalize and validate params
-        $this->normalizeServers($servers);
-
-        $resource = & $this->resources[$id];
-        $resource['servers']     = $servers;
-        $resource['initialized'] = false;
+        // normalize, validate and set servers param
+        $this->setServersOption($id, $servers);
 
         return $this;
     }
@@ -598,6 +603,11 @@ class MongoDBResourceManager
         return $this->getClientOption($id, 'w');
     }
 
+    /**
+     * @param $id
+     * @param $wTimeoutMS
+     * @return $this|MongoDBResourceManager
+     */
     public function setWTimeoutMS($id, $wTimeoutMS)
     {
         if (!$this->hasResource($id)) {
@@ -622,14 +632,140 @@ class MongoDBResourceManager
 
     /**
      * @param $id
+     * @param $servers
+     */
+    protected function setServersOption($id, $servers)
+    {
+        $this->normalizeServers($servers);
+        $resource = & $this->resources[$id];
+        $resource['client_options']['servers'] = $servers;
+        $resource['initialized'] = false;
+    }
+
+    /**
+     * Set a client option in resources.
+     *
+     * @param $id
      * @param $option
      * @param $value
      */
     protected function setClientOption($id, $option, $value)
     {
+        $this->validateClientOption($option, $value);
         $resource = & $this->resources[$id];
         $resource['client_options'][$option] = $value;
         $resource['initialized'] = false;
+    }
+
+    /**
+     * Validate a client option value.
+     *
+     * @param $option
+     * @param $value
+     * @throws \Zend\Cache\Exception\RuntimeException
+     */
+    protected function validateClientOption($option, $value)
+    {
+        $this->initValidators();
+
+        switch ($option) {
+            case 'replicaSet':
+            case 'db':
+            case 'collection':
+            case 'username':
+            case 'password':
+                if (! $this->validators['string']->isValid()) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'connect':
+            case 'fsync':
+            case 'journal':
+            case 'ssl':
+                if (! $this->validators['bool']->isValid()) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'connectTimeoutMS':
+            case 'socketTimeoutMS':
+            case 'wTimeoutMS':
+                if (! $this->validators['int']($value) === true) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'readPreference':
+                if (! $this->validators['rp']($value) === true) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'readPreferenceTags':
+                if (! $this->validators['rp_tags']($value) === true) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'w':
+                if (!is_int($value) && !is_string($value) && !is_array($value)) {
+                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                }
+                break;
+            default:
+        }
+    }
+
+    /**
+     * Initialize the validators.
+     */
+    protected function initValidators()
+    {
+        $validators = & $this->validators;
+
+        if (empty($validators)) {
+            $item = new Validator\InArray();
+            $item->setHaystack(array(true, false, 1, 0));
+            $validators['bool'] = $item;
+
+            $item = new Validator\StringLength();
+            $item->setMin(1);
+            $validators['string'] = $item;
+
+            $item = function ($value) {
+                if (strval(intval($value)) != $value || is_bool($value) || is_null($value)) {
+                    return false;
+                }
+
+                return true;
+            };
+            $validators['int'] = $item;
+
+            $item = new Validator\InArray();
+            $item->setHaystack(
+                array(
+                    MongoDBResource::RP_NEAREST,
+                    MongoDBResource::RP_PRIMARY,
+                    MongoDBResource::RP_PRIMARY_PREFERRED,
+                    MongoDBResource::RP_SECONDARY,
+                    MongoDBResource::RP_SECONDARY_PREFERRED
+                )
+            );
+            $validators['rp'] = $item;
+
+            $item = function ($value) {
+                if (is_array($value) || empty($value)) {
+                    return false;
+                }
+
+                $itemVal = new Validator\StringLength();
+                $itemVal->setMin(1);
+
+                foreach ($value as $item) {
+                    if (! $itemVal->isValid($item)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            $validators['rp_tags'] = $item;
+        }
     }
 
     /**

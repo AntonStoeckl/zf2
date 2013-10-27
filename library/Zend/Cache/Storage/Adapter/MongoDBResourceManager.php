@@ -674,7 +674,7 @@ class MongoDBResourceManager
             case 'collection':
             case 'username':
             case 'password':
-                if (! $this->validators['string']->isValid()) {
+                if (! $this->validators['string']->isValid($value)) {
                     throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
                 }
                 break;
@@ -682,7 +682,7 @@ class MongoDBResourceManager
             case 'fsync':
             case 'journal':
             case 'ssl':
-                if (! $this->validators['bool']->isValid()) {
+                if (! $this->validators['bool']->isValid($value)) {
                     throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
                 }
                 break;
@@ -694,7 +694,7 @@ class MongoDBResourceManager
                 }
                 break;
             case 'readPreference':
-                if (! $this->validators['rp']($value) === true) {
+                if (! $this->validators['rp']->isValid($value) === true) {
                     throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
                 }
                 break;

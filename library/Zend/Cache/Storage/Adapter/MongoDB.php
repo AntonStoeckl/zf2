@@ -35,7 +35,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /**
      * The memcached resource manager
      *
-     * @var null|MemcachedResourceManager
+     * @var null|MongoDBResourceManager
      */
     protected $resourceManager;
 
@@ -45,13 +45,6 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      * @var null|string
      */
     protected $resourceId;
-
-    /**
-     * The namespace prefix
-     *
-     * @var string
-     */
-    protected $namespacePrefix = '';
 
     /**
      * Constructor
@@ -93,21 +86,37 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             $this->resourceManager = $options->getResourceManager();
             $this->resourceId      = $options->getResourceId();
 
-            // init namespace prefix
-            $namespace = $options->getNamespace();
-
-            if ($namespace !== '') {
-                $this->namespacePrefix = $namespace;
-            } else {
-                $this->namespacePrefix = '';
-            }
-
             // update initialized flag
             $this->initialized = true;
         }
 
         return $this->resourceManager->getResource($this->resourceId);
     }
+
+    /**
+     * @return \MongoDB
+     */
+    protected function getMongoDatabase()
+    {
+        $mongoClient = $this->getMongoDBResource();
+
+        return $mongoClient->selectDB($this->resourceManager->getDB($this->resourceId));
+    }
+
+    /**
+     * @return \MongoCollection
+     */
+    protected function getMongoCollection()
+    {
+        $mongoCollection = $this->getMongoDatabase()
+            ->selectCollection($this->resourceManager->getCollection($this->resourceId));
+
+        $mongoCollection->ensureIndex(array('uid' => 1, 'unique' => true));
+        $mongoCollection->ensureIndex(array('expire' => 1, 'expireAfterSeconds' => 0));
+
+        return $mongoCollection;
+    }
+
 
     /* options */
 
@@ -152,11 +161,14 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     public function flush()
     {
-        $mongoc = $this->getMongoDBResource();
-        
-        if (! $mongoc->flush()) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
+        $mongoc = $this->getMongoCollection();
+
+        $result = $mongoc->remove(array());
+
+        if (true !== $result) {
+            $this->checkResult($result);
         }
+
         return true;
     }
 
@@ -165,16 +177,15 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /**
      * Internal method to get an item.
      *
-     * @param  string  $normalizedKey
-     * @param  bool $success
-     * @param  mixed   $casToken
+     * @param  string $normalizedKey
+     * @param  bool   $success
+     * @param  mixed  $casToken
      * @return mixed Data on success, null on failure
      * @throws Exception\ExceptionInterface
      */
     protected function internalGetItem(& $normalizedKey, & $success = null, & $casToken = null)
     {
-        $mongoc        = $this->getMongoDBResource();
-        $internalKey = $this->namespacePrefix . $normalizedKey;
+        $mongoc = $this->getMongoCollection();
 
         if (func_num_args() > 2) {
             $result = $mongoc->get($internalKey, null, $casToken);
@@ -183,6 +194,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         }
 
         $success = true;
+
         if ($result === false || $result === null) {
             $rsCode = $mongoc->getResultCode();
             if ($rsCode == MongoDBResource::RES_NOTFOUND) {
@@ -338,10 +350,23 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalSetItem(& $normalizedKey, & $value)
     {
-        $mongoc       = $this->getMongoDBResource();
-        $expiration = $this->expirationTime();
-        if (!$mongoc->set($this->namespacePrefix . $normalizedKey, $value, $expiration)) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
+        $mongoc = $this->getMongoCollection();
+        $ttl = $this->getOptions()->getTtl();
+        $expiration = time() + $ttl;
+
+        $criteria = array();
+        $options = array('upsert' => true);
+
+        $data = array(
+            'uid' => $normalizedKey,
+            'value' => $value,
+            'expire' => new \MongoDate($expiration)
+        );
+
+        $result = $mongoc->update($criteria, $data, $options);
+
+        if (true !== $result) {
+            $this->checkResult($result);
         }
 
         return true;
@@ -356,16 +381,8 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalSetItems(array & $normalizedKeyValuePairs)
     {
-        $mongoc       = $this->getMongoDBResource();
-        $expiration = $this->expirationTime();
-
-        $namespacedKeyValuePairs = array();
-        foreach ($normalizedKeyValuePairs as $normalizedKey => & $value) {
-            $namespacedKeyValuePairs[$this->namespacePrefix . $normalizedKey] = & $value;
-        }
-
-        if (!$mongoc->setMulti($namespacedKeyValuePairs, $expiration)) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
+        foreach ($normalizedKeyValuePairs as $key => $value) {
+            $this->internalSetItem($key, $value);
         }
 
         return array();
@@ -377,20 +394,10 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      * @param  string $normalizedKey
      * @param  mixed  $value
      * @return bool
-     * @throws Exception\ExceptionInterface
      */
     protected function internalAddItem(& $normalizedKey, & $value)
     {
-        $mongoc       = $this->getMongoDBResource();
-        $expiration = $this->expirationTime();
-        if (!$mongoc->add($this->namespacePrefix . $normalizedKey, $value, $expiration)) {
-            if ($mongoc->getResultCode() == MongoDBResource::RES_NOTSTORED) {
-                return false;
-            }
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
-        }
-
-        return true;
+        return $this->internalSetItem($normalizedKey, $value);
     }
 
     /**
@@ -399,49 +406,10 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      * @param  string $normalizedKey
      * @param  mixed  $value
      * @return bool
-     * @throws Exception\ExceptionInterface
      */
     protected function internalReplaceItem(& $normalizedKey, & $value)
     {
-        $mongoc       = $this->getMongoDBResource();
-        $expiration = $this->expirationTime();
-        if (!$mongoc->replace($this->namespacePrefix . $normalizedKey, $value, $expiration)) {
-            $rsCode = $mongoc->getResultCode();
-            if ($rsCode == MongoDBResource::RES_NOTSTORED) {
-                return false;
-            }
-            throw $this->getExceptionByResultCode($rsCode);
-        }
-
-        return true;
-    }
-
-    /**
-     * Internal method to set an item only if token matches
-     *
-     * @param  mixed  $token
-     * @param  string $normalizedKey
-     * @param  mixed  $value
-     * @return bool
-     * @throws Exception\ExceptionInterface
-     * @see    getItem()
-     * @see    setItem()
-     */
-    protected function internalCheckAndSetItem(& $token, & $normalizedKey, & $value)
-    {
-        $mongoc       = $this->getMongoDBResource();
-        $expiration = $this->expirationTime();
-        $result     = $mongoc->cas($token, $this->namespacePrefix . $normalizedKey, $value, $expiration);
-
-        if ($result === false) {
-            $rsCode = $mongoc->getResultCode();
-            if ($rsCode !== 0 && $rsCode != MongoDBResource::RES_DATA_EXISTS) {
-                throw $this->getExceptionByResultCode($rsCode);
-            }
-        }
-
-
-        return $result;
+        return $this->internalSetItem($normalizedKey, $value);
     }
 
     /**
@@ -453,16 +421,12 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalRemoveItem(& $normalizedKey)
     {
-        $mongoc   = $this->getMongoDBResource();
-        $result = $mongoc->delete($this->namespacePrefix . $normalizedKey);
+        $mongoc = $this->getMongoCollection();
 
-        if ($result === false) {
-            $rsCode = $mongoc->getResultCode();
-            if ($rsCode == MongoDBResource::RES_NOTFOUND) {
-                return false;
-            } elseif ($rsCode != MongoDBResource::RES_SUCCESS) {
-                throw $this->getExceptionByResultCode($rsCode);
-            }
+        $result = $mongoc->remove(array('uid' => $normalizedKey));
+
+        if (true !== $result) {
+            $this->checkResult($result);
         }
 
         return true;
@@ -477,38 +441,11 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalRemoveItems(array & $normalizedKeys)
     {
-        // support for removing multiple items at once has been added in ext/memcached-2.0.0
-        if (static::$extMongoDBVersion < 2) {
-            return parent::internalRemoveItems($normalizedKeys);
+        foreach ($normalizedKeys as $normalizedKey) {
+            $this->internalRemoveItem($normalizedKey);
         }
 
-        $mongoc = $this->getMongoDBResource();
-
-        foreach ($normalizedKeys as & $normalizedKey) {
-            $normalizedKey = $this->namespacePrefix . $normalizedKey;
-        }
-
-        $rsCodes = $mongoc->deleteMulti($normalizedKeys);
-
-        $missingKeys = array();
-        foreach ($rsCodes as $key => $rsCode) {
-            if ($rsCode !== true && $rsCode != MongoDBResource::RES_SUCCESS) {
-                if ($rsCode != MongoDBResource::RES_NOTFOUND) {
-                    throw $this->getExceptionByResultCode($rsCode);
-                }
-                $missingKeys[] = $key;
-            }
-        }
-
-        // remove namespace prefix
-        if ($missingKeys && $this->namespacePrefix !== '') {
-            $nsPrefixLength = strlen($this->namespacePrefix);
-            foreach ($missingKeys as & $missingKey) {
-                $missingKey = substr($missingKey, $nsPrefixLength);
-            }
-        }
-
-        return $missingKeys;
+        return array();
     }
 
     /**
@@ -521,27 +458,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalIncrementItem(& $normalizedKey, & $value)
     {
-        $mongoc        = $this->getMongoDBResource();
-        $internalKey = $this->namespacePrefix . $normalizedKey;
-        $value       = (int) $value;
-        $newValue    = $mongoc->increment($internalKey, $value);
-
-        if ($newValue === false) {
-            $rsCode = $mongoc->getResultCode();
-
-            // initial value
-            if ($rsCode == MongoDBResource::RES_NOTFOUND) {
-                $newValue = $value;
-                $mongoc->add($internalKey, $newValue, $this->expirationTime());
-                $rsCode = $mongoc->getResultCode();
-            }
-
-            if ($rsCode) {
-                throw $this->getExceptionByResultCode($rsCode);
-            }
-        }
-
-        return $newValue;
+        // TODO: implement
     }
 
     /**
@@ -554,27 +471,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalDecrementItem(& $normalizedKey, & $value)
     {
-        $mongoc        = $this->getMongoDBResource();
-        $internalKey = $this->namespacePrefix . $normalizedKey;
-        $value       = (int) $value;
-        $newValue    = $mongoc->decrement($internalKey, $value);
-
-        if ($newValue === false) {
-            $rsCode = $mongoc->getResultCode();
-
-            // initial value
-            if ($rsCode == MongoDBResource::RES_NOTFOUND) {
-                $newValue = -$value;
-                $mongoc->add($internalKey, $newValue, $this->expirationTime());
-                $rsCode = $mongoc->getResultCode();
-            }
-
-            if ($rsCode) {
-                throw $this->getExceptionByResultCode($rsCode);
-            }
-        }
-
-        return $newValue;
+        // TODO: implement
     }
 
     /* status */
@@ -610,7 +507,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
                     'useRequestTime'     => false,
                     'expiredRead'        => false,
                     'maxKeyLength'       => 255,
-                    'namespaceIsPrefix'  => true,
+                    'namespaceIsPrefix'  => false,
                 )
             );
         }
@@ -621,45 +518,16 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /* internal */
 
     /**
-     * Get expiration time by ttl
-     *
-     * Some storage commands involve sending an expiration value (relative to
-     * an item or to an operation requested by the client) to the server. In
-     * all such cases, the actual value sent may either be Unix time (number of
-     * seconds since January 1, 1970, as an integer), or a number of seconds
-     * starting from current time. In the latter case, this number of seconds
-     * may not exceed 60*60*24*30 (number of seconds in 30 days); if the
-     * expiration value is larger than that, the server will consider it to be
-     * real Unix time value rather than an offset from current time.
-     *
-     * @return int
-     */
-    protected function expirationTime()
-    {
-        $ttl = $this->getOptions()->getTtl();
-        if ($ttl > 2592000) {
-            return time() + $ttl;
-        }
-        return $ttl;
-    }
-
-    /**
      * Generate exception based of memcached result code
      *
-     * @param int $code
-     * @return Exception\RuntimeException
-     * @throws Exception\InvalidArgumentException On success code
+     * @param array $result
+     * @throws Exception\RuntimeException
      */
-    protected function getExceptionByResultCode($code)
-    {
-        switch ($code) {
-            case MongoDBResource::RES_SUCCESS:
-                throw new Exception\InvalidArgumentException(
-                    "The result code '{$code}' (SUCCESS) isn't an error"
-                );
 
-            default:
-                return new Exception\RuntimeException($this->getMongoDBResource()->getResultMessage());
+    protected function checkResult(array $result)
+    {
+        if ($result['ok'] == 0) {
+            throw new Exception\RuntimeException($result['errmsg']);
         }
     }
 }

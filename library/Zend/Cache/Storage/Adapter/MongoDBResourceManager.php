@@ -37,21 +37,21 @@ class MongoDBResourceManager
             'host' => 'localhost',
             'port' => 27017
         ),
-        'replicaSet' => null,
-        'db' => 'cache',
-        'collection' => 'cache',
-        'connect' => true,
-        'connectTimeoutMS' => null,
-        'fsync' => null,
-        'journal' => null,
-        'username' => null,
-        'password' => null,
-        'readPreference' => null,
+        'replicaSet'         => null,
+        'db'                 => 'zfcache',
+        'collection'         => 'zfcache',
+        'connect'            => true,
+        'connectTimeoutMS'   => null,
+        'fsync'              => null,
+        'journal'            => null,
+        'username'           => null,
+        'password'           => null,
+        'readPreference'     => null,
         'readPreferenceTags' => null,
-        'socketTimeoutMS' => null,
-        'ssl' => null,
-        'w' => null,
-        'wTimeoutMS' => null
+        'socketTimeoutMS'    => null,
+        'ssl'                => null,
+        'w'                  => 1,
+        'wTimeoutMS'         => null
     );
 
     /**

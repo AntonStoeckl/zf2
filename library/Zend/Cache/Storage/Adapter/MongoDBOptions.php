@@ -88,6 +88,13 @@ class MongoDBOptions extends AdapterOptions
         return $this;
     }
 
+    public function setNamespace($namespace)
+    {
+        $namespace = (string) $namespace;
+
+        return $this->setCollection($namespace);
+    }
+
     /**
     * Set a list of mongo servers to add on initialize
     *
@@ -139,7 +146,7 @@ class MongoDBOptions extends AdapterOptions
     {
         $this->getResourceManager()->setCollection($this->getResourceId(), $collection);
 
-        return $this;
+        return parent::setNamespace($collection);
     }
 
     public function getCollection()

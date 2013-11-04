@@ -188,12 +188,10 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
 
         $data = $mongoc->findOne(
             array('uid' => $normalizedKey),
-            array('value' => 1)
+            array('value' => true, 'expire' => true)
         );
 
-        // TODO: check if it's possible that mongo delivers expired items (we know they still can be in the collection)
-
-        if ($data === null) {
+        if ($data === null || $this->notExpired($data['expire']) === false) {
             $success = false;
             return null;
         }
@@ -217,13 +215,15 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         /** @var \MongoCursor $cursor */
         $cursor = $mongoc->find(
             array('uid' => array('$in' => $normalizedKeys)),
-            array('uid' => 1, 'value' => 1)
+            array('uid' => true, 'value' => true, 'expire' => true)
         );
 
         $result = array();
 
         foreach ($cursor as $item) {
-            $result[$item['uid']] = $item['value'];
+            if ($this->notExpired($item['expire'])) {
+                $result[$item['uid']] = $item['value'];
+            }
         }
 
         return $result;
@@ -239,13 +239,16 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     {
         $mongoc = $this->getMongoCollection();
 
-        /** @var \MongoCursor $cursor */
-        $cursor = $mongoc->find(
+        $data = $mongoc->findOne(
             array('uid' => $normalizedKey),
-            array('uid' => 1)
+            array('expire' => true)
         );
 
-        return ($cursor->count() === 0) ? false : true;
+        if ($data === null || $this->notExpired($data['expire']) === false) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -262,49 +265,14 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         /** @var \MongoCursor $cursor */
         $cursor = $mongoc->find(
             array('uid' => array('$in' => $normalizedKeys)),
-            array('uid' => 1)
+            array('uid' => true, 'expire' => true)
         );
 
         $result = array();
 
         foreach ($cursor as $item) {
-            $result[] = $item['uid'];
-        }
-
-        return $result;
-    }
-
-    /**
-     * Get metadata of multiple items
-     *
-     * @param  array $normalizedKeys
-     * @return array Associative array of keys and metadata
-     * @throws Exception\ExceptionInterface
-     */
-    protected function internalGetMetadatas(array & $normalizedKeys)
-    {
-        $mongoc = $this->getMongoDBResource();
-
-        foreach ($normalizedKeys as & $normalizedKey) {
-            $normalizedKey = $this->namespacePrefix . $normalizedKey;
-        }
-
-        $result = $mongoc->getMulti($normalizedKeys);
-        if ($result === false) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
-        }
-
-        // remove namespace prefix and use an empty array as metadata
-        if ($this->namespacePrefix !== '') {
-            $tmp            = array();
-            $nsPrefixLength = strlen($this->namespacePrefix);
-            foreach (array_keys($result) as $internalKey) {
-                $tmp[substr($internalKey, $nsPrefixLength)] = array();
-            }
-            $result = $tmp;
-        } else {
-            foreach ($result as & $value) {
-                $value = array();
+            if ($this->notExpired($item['expire']) === false) {
+                $result[] = $item['uid'];
             }
         }
 
@@ -421,32 +389,6 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         return array();
     }
 
-    /**
-     * Internal method to increment an item.
-     *
-     * @param  string $normalizedKey
-     * @param  int    $value
-     * @return int|bool The new value on success, false on failure
-     * @throws Exception\ExceptionInterface
-     */
-    protected function internalIncrementItem(& $normalizedKey, & $value)
-    {
-        // TODO: implement
-    }
-
-    /**
-     * Internal method to decrement an item.
-     *
-     * @param  string $normalizedKey
-     * @param  int    $value
-     * @return int|bool The new value on success, false on failure
-     * @throws Exception\ExceptionInterface
-     */
-    protected function internalDecrementItem(& $normalizedKey, & $value)
-    {
-        // TODO: implement
-    }
-
     /* status */
 
     /**
@@ -491,12 +433,26 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /* internal */
 
     /**
+     * Check that a cached value is not expired
+     *
+     * @param int $value
+     * @return bool
+     */
+    protected function notExpired($value)
+    {
+        if ($value >= time()) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Generate exception based of memcached result code
      *
      * @param array $result
      * @throws Exception\RuntimeException
      */
-
     protected function checkResult(array $result)
     {
         if ($result['ok'] == 0) {

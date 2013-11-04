@@ -181,32 +181,27 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      * @param  bool   $success
      * @param  mixed  $casToken
      * @return mixed Data on success, null on failure
-     * @throws Exception\ExceptionInterface
      */
     protected function internalGetItem(& $normalizedKey, & $success = null, & $casToken = null)
     {
         $mongoc = $this->getMongoCollection();
 
-        if (func_num_args() > 2) {
-            $result = $mongoc->get($internalKey, null, $casToken);
-        } else {
-            $result = $mongoc->get($internalKey);
+        $data = $mongoc->findOne(
+            array('uid' => $normalizedKey),
+            array('value' => 1)
+        );
+
+        // TODO: check if it's possible that mongo delivers expired items (we know they still can be in the collection)
+
+        if ($data === null) {
+            $success = false;
+            return null;
         }
 
         $success = true;
+        $casToken = $data['value'];
 
-        if ($result === false || $result === null) {
-            $rsCode = $mongoc->getResultCode();
-            if ($rsCode == MongoDBResource::RES_NOTFOUND) {
-                $result = null;
-                $success = false;
-            } elseif ($rsCode) {
-                $success = false;
-                throw $this->getExceptionByResultCode($rsCode);
-            }
-        }
-
-        return $result;
+        return $data['value'];
     }
 
     /**
@@ -214,29 +209,21 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      *
      * @param  array $normalizedKeys
      * @return array Associative array of keys and values
-     * @throws Exception\ExceptionInterface
      */
     protected function internalGetItems(array & $normalizedKeys)
     {
-        $mongoc = $this->getMongoDBResource();
+        $mongoc = $this->getMongoCollection();
 
-        foreach ($normalizedKeys as & $normalizedKey) {
-            $normalizedKey = $this->namespacePrefix . $normalizedKey;
-        }
+        /** @var \MongoCursor $cursor */
+        $cursor = $mongoc->find(
+            array('uid' => array('$in' => $normalizedKeys)),
+            array('uid' => 1, 'value' => 1)
+        );
 
-        $result = $mongoc->getMulti($normalizedKeys);
-        if ($result === false) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
-        }
+        $result = array();
 
-        // remove namespace prefix from result
-        if ($result && $this->namespacePrefix !== '') {
-            $tmp            = array();
-            $nsPrefixLength = strlen($this->namespacePrefix);
-            foreach ($result as $internalKey => & $value) {
-                $tmp[substr($internalKey, $nsPrefixLength)] = & $value;
-            }
-            $result = $tmp;
+        foreach ($cursor as $item) {
+            $result[$item['uid']] = $item['value'];
         }
 
         return $result;
@@ -247,24 +234,18 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      *
      * @param  string $normalizedKey
      * @return bool
-     * @throws Exception\ExceptionInterface
      */
     protected function internalHasItem(& $normalizedKey)
     {
-        $mongoc  = $this->getMongoDBResource();
-        $value = $mongoc->get($this->namespacePrefix . $normalizedKey);
-        if ($value === false || $value === null) {
-            $rsCode = $mongoc->getResultCode();
-            if ($rsCode == MongoDBResource::RES_SUCCESS) {
-                return true;
-            } elseif ($rsCode == MongoDBResource::RES_NOTFOUND) {
-                return false;
-            } else {
-                throw $this->getExceptionByResultCode($rsCode);
-            }
-        }
+        $mongoc = $this->getMongoCollection();
 
-        return true;
+        /** @var \MongoCursor $cursor */
+        $cursor = $mongoc->find(
+            array('uid' => $normalizedKey),
+            array('uid' => 1)
+        );
+
+        return ($cursor->count() === 0) ? false : true;
     }
 
     /**
@@ -276,26 +257,18 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalHasItems(array & $normalizedKeys)
     {
-        $mongoc = $this->getMongoDBResource();
+        $mongoc = $this->getMongoCollection();
 
-        foreach ($normalizedKeys as & $normalizedKey) {
-            $normalizedKey = $this->namespacePrefix . $normalizedKey;
-        }
+        /** @var \MongoCursor $cursor */
+        $cursor = $mongoc->find(
+            array('uid' => array('$in' => $normalizedKeys)),
+            array('uid' => 1)
+        );
 
-        $result = $mongoc->getMulti($normalizedKeys);
-        if ($result === false) {
-            throw $this->getExceptionByResultCode($mongoc->getResultCode());
-        }
+        $result = array();
 
-        // Convert to a simgle list
-        $result = array_keys($result);
-
-        // remove namespace prefix
-        if ($result && $this->namespacePrefix !== '') {
-            $nsPrefixLength = strlen($this->namespacePrefix);
-            foreach ($result as & $internalKey) {
-                $internalKey = substr($internalKey, $nsPrefixLength);
-            }
+        foreach ($cursor as $item) {
+            $result[] = $item['uid'];
         }
 
         return $result;

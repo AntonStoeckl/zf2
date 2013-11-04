@@ -28,18 +28,26 @@ class MongoDBResourceManager
     protected $resources = array();
 
     /**
+     * @var array
+     */
+    protected static $defaultServer = array(
+        'host' => 'localhost',
+        'port' => 27017
+    );
+
+    /**
+     * @var string
+     */
+    protected static $defaultCollection = 'zfcache';
+
+    /**
      * Default client options.
      *
      * @var array
      */
     protected static $defaultClientOptions = array(
-        'servers' => array(
-            'host' => 'localhost',
-            'port' => 27017
-        ),
         'replicaSet'         => null,
         'db'                 => 'zfcache',
-        'collection'         => 'zfcache',
         'connect'            => true,
         'connectTimeoutMS'   => null,
         'fsync'              => null,
@@ -85,8 +93,10 @@ class MongoDBResourceManager
 
         $resource = & $this->resources[$id];
 
-        if ($resource['client'] instanceof MongoDBResource && $resource['initialized'] === true) {
-            return $resource['client'];
+        if (array_key_exists('client', $resource)) {
+            if ($resource['client'] instanceof MongoDBResource && $resource['initialized'] === true) {
+                return $resource['client'];
+            }
         }
 
         $mongoc = $this->getMongoClient($resource);
@@ -127,12 +137,28 @@ class MongoDBResourceManager
                 }
 
                 if (null !== $value) {
-                    $this->setClientOption($id, 'key', $value);
+                    $this->setClientOption($id, $key, $value);
                 }
             }
 
             if (!empty($resource['servers'])) {
                 $this->setServersOption($id, $resource['servers']);
+            } else {
+                $this->setServersOption(
+                    $id,
+                    array(
+                        array(
+                            'host' => self::$defaultServer['host'],
+                            'port' => self::$defaultServer['port']
+                        )
+                    )
+                );
+            }
+
+            if (!empty($resource['collection'])) {
+                $this->setCollection($id, $resource['collection']);
+            } else {
+                $this->setCollection($id, self::$defaultCollection);
             }
         } else {
             $this->resources[$id]['initialized'] = true;
@@ -292,18 +318,28 @@ class MongoDBResourceManager
                 ));
         }
 
-        $this->setClientOption($id, 'collection', $collection);
+        $this->validateClientOption('collection', $collection);
+        $resource = & $this->resources[$id];
+        $resource['collection'] = $collection;
+        $resource['initialized'] = false;
 
         return $this;
     }
 
     /**
      * @param $id
-     * @return mixed
+     * @return string
+     * @throws Exception\RuntimeException
      */
     public function getCollection($id)
     {
-        return $this->getClientOption($id, 'collection');
+        if (!$this->hasResource($id)) {
+            throw new Exception\RuntimeException("No resource with id '{$id}'");
+        }
+
+        $resource = & $this->resources[$id];
+
+        return $resource['collection'];
     }
 
     /**
@@ -638,7 +674,7 @@ class MongoDBResourceManager
     {
         $this->normalizeServers($servers);
         $resource = & $this->resources[$id];
-        $resource['client_options']['servers'] = $servers;
+        $resource['servers'] = $servers;
         $resource['initialized'] = false;
     }
 
@@ -817,8 +853,8 @@ class MongoDBResourceManager
      */
     protected function normalizeServer(& $server)
     {
-        $host = static::$defaultClientOptions['servers']['host'];
-        $port = static::$defaultClientOptions['servers']['port'];
+        $host = static::$defaultServer['host'];
+        $port = static::$defaultServer['port'];
 
         // convert a single server into an array
         if ($server instanceof Traversable) {

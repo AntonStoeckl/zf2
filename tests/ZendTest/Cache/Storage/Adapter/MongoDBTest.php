@@ -13,7 +13,6 @@ use Zend\Cache;
 
 class MongoDBTest extends CommonAdapterTest
 {
-
     /**
      * @var Cache\Storage\Adapter\MongoDBOptions
      */

@@ -435,12 +435,12 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /**
      * Check that a cached value is not expired
      *
-     * @param int $value
+     * @param \MongoDate $value
      * @return bool
      */
-    protected function notExpired($value)
+    protected function notExpired(\MongoDate $value)
     {
-        if ($value >= time()) {
+        if ($value->sec >= time()) {
             return false;
         }
 

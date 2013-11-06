@@ -79,7 +79,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function getMongoDBResource()
     {
-        if (!$this->initialized) {
+        if (! $this->initialized) {
             $options = $this->getOptions();
 
             // get resource manager and resource id
@@ -112,7 +112,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             ->selectCollection($this->resourceManager->getCollection($this->resourceId));
 
         $mongoCollection->ensureIndex(array('uid' => 1, 'unique' => true));
-        $mongoCollection->ensureIndex(array('expire' => 1, 'expireAfterSeconds' => 0));
+        $mongoCollection->ensureIndex(array('expire' => 1, 'expireAfterSeconds' => 0), array('sparse' => true));
 
         return $mongoCollection;
     }
@@ -129,7 +129,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     public function setOptions($options)
     {
-        if (!$options instanceof MongoDBOptions) {
+        if (! $options instanceof MongoDBOptions) {
             $options = new MongoDBOptions($options);
         }
 
@@ -144,7 +144,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     public function getOptions()
     {
-        if (!$this->options) {
+        if (! $this->options) {
             $this->setOptions(new MongoDBOptions());
         }
 
@@ -191,7 +191,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             array('value' => true, 'expire' => true)
         );
 
-        if ($data === null || $this->notExpired($data['expire']) === false) {
+        if ($data === null || $this->notExpired($data) === false) {
             $success = false;
             return null;
         }
@@ -221,7 +221,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         $result = array();
 
         foreach ($cursor as $item) {
-            if ($this->notExpired($item['expire'])) {
+            if ($this->notExpired($item)) {
                 $result[$item['uid']] = $item['value'];
             }
         }
@@ -244,7 +244,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             array('expire' => true)
         );
 
-        if ($data === null || $this->notExpired($data['expire']) === false) {
+        if ($data === null || $this->notExpired($data) === false) {
             return false;
         }
 
@@ -271,7 +271,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         $result = array();
 
         foreach ($cursor as $item) {
-            if ($this->notExpired($item['expire']) === false) {
+            if ($this->notExpired($item) === false) {
                 $result[] = $item['uid'];
             }
         }
@@ -292,17 +292,20 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     protected function internalSetItem(& $normalizedKey, & $value)
     {
         $mongoc = $this->getMongoCollection();
-        $ttl = $this->getOptions()->getTtl();
-        $expiration = time() + $ttl;
 
-        $criteria = array();
+        $criteria = array('uid' => $normalizedKey);
         $options = array('upsert' => true);
 
         $data = array(
             'uid' => $normalizedKey,
-            'value' => $value,
-            'expire' => new \MongoDate($expiration)
+            'value' => $value
         );
+
+        $ttl = (int) $this->getOptions()->getTtl();
+
+        if ($ttl > 0) {
+            $data['expire'] = new \MongoDate(time() + $ttl);
+        }
 
         $result = $mongoc->update($criteria, $data, $options);
 
@@ -435,13 +438,18 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     /**
      * Check that a cached value is not expired
      *
-     * @param \MongoDate $value
+     * @param array $value
      * @return bool
      */
-    protected function notExpired(\MongoDate $value)
+    protected function notExpired(array $value)
     {
-        if ($value->sec >= time()) {
-            return false;
+        if (array_key_exists('expire', $value) && $value['expire'] instanceof \MongoDate) {
+            /** @var \MongoDate $date */
+            $date = $value['expire'];
+
+            if ($date->sec >= time()) {
+                return false;
+            }
         }
 
         return true;

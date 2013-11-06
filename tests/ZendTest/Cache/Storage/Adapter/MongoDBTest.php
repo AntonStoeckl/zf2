@@ -26,20 +26,24 @@ class MongoDBTest extends CommonAdapterTest
 
     public function setUp()
     {
-        if (!defined('TESTS_ZEND_CACHE_MONGODB_ENABLED') || !TESTS_ZEND_CACHE_MONGODB_ENABLED) {
+        if (! defined('TESTS_ZEND_CACHE_MONGODB_ENABLED') || !TESTS_ZEND_CACHE_MONGODB_ENABLED) {
             $this->markTestSkipped("Skipped by TestConfiguration (TESTS_ZEND_CACHE_MONGODB_ENABLED)");
         }
 
-        if (!extension_loaded('mongo')) {
+        if (! extension_loaded('mongo')) {
             $this->markTestSkipped("MongoDB extension is not loaded");
         }
 
         $this->_options  = new Cache\Storage\Adapter\MongoDBOptions(array(
             'resource_id' => __CLASS__,
+            'namespace'   => defined('TESTS_ZEND_CACHE_MONGODB_NAMESPACE')
+                    ? TESTS_ZEND_CACHE_MONGODB_NAMESPACE
+                    : 'zfcache'
         ));
 
         if (defined('TESTS_ZEND_CACHE_MONGODB_HOST') && defined('TESTS_ZEND_CACHE_MONGODB_PORT')) {
-            $this->_options->setServers(
+            $this->_options->getResourceManager()
+                ->setServers(
                     __CLASS__,
                     array('host' => TESTS_ZEND_CACHE_MONGODB_HOST, 'port' => TESTS_ZEND_CACHE_MONGODB_PORT)
                 );
@@ -56,14 +60,6 @@ class MongoDBTest extends CommonAdapterTest
                 ->setDB(
                     __CLASS__,
                     TESTS_ZEND_CACHE_MONGODB_DATABASE
-                );
-        }
-
-        if (defined('TESTS_ZEND_CACHE_MONGODB_COLLECTION')) {
-            $this->_options->getResourceManager()
-                ->setCollection(
-                    __CLASS__,
-                    TESTS_ZEND_CACHE_MONGODB_COLLECTION
                 );
         }
 

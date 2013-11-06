@@ -87,7 +87,7 @@ class MongoDBResourceManager
      */
     public function getResource($id)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             throw new Exception\RuntimeException("No resource with id '{$id}'");
         }
 
@@ -120,10 +120,10 @@ class MongoDBResourceManager
     {
         $id = (string) $id;
 
-        if (!($resource instanceof MongoDBResource)) {
+        if (! $resource instanceof MongoDBResource) {
             if ($resource instanceof Traversable) {
                 $resource = ArrayUtils::iteratorToArray($resource);
-            } elseif (!is_array($resource)) {
+            } elseif (! is_array($resource)) {
                 throw new Exception\InvalidArgumentException(
                     'Resource must be an instance of MongoClient or an array or Traversable'
                 );
@@ -141,7 +141,7 @@ class MongoDBResourceManager
                 }
             }
 
-            if (!empty($resource['servers'])) {
+            if (! empty($resource['servers'])) {
                 $this->setServersOption($id, $resource['servers']);
             } else {
                 $this->setServersOption(
@@ -155,7 +155,7 @@ class MongoDBResourceManager
                 );
             }
 
-            if (!empty($resource['collection'])) {
+            if (! empty($resource['collection'])) {
                 $this->setCollection($id, $resource['collection']);
             } else {
                 $this->setCollection($id, self::$defaultCollection);
@@ -214,7 +214,7 @@ class MongoDBResourceManager
      */
     public function setServers($id, $servers)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'servers' => $servers
                 ));
@@ -235,7 +235,7 @@ class MongoDBResourceManager
      */
     public function getServers($id)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             throw new Exception\RuntimeException("No resource with id '{$id}'");
         }
 
@@ -258,7 +258,7 @@ class MongoDBResourceManager
      */
     public function setReplicaSet($id, $replicaSet)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'replicaSet' => $replicaSet,
                 ));
@@ -285,7 +285,7 @@ class MongoDBResourceManager
      */
     public function setDB($id, $db)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'db' => $db,
                 ));
@@ -312,7 +312,7 @@ class MongoDBResourceManager
      */
     public function setCollection($id, $collection)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'collection' => $collection,
                 ));
@@ -333,7 +333,7 @@ class MongoDBResourceManager
      */
     public function getCollection($id)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             throw new Exception\RuntimeException("No resource with id '{$id}'");
         }
 
@@ -349,7 +349,7 @@ class MongoDBResourceManager
      */
     public function setConnect($id, $connect)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'connect' => $connect,
                 ));
@@ -376,7 +376,7 @@ class MongoDBResourceManager
      */
     public function setConnectTimeoutMS($id, $connectTimeoutMS)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'connectTimeoutMS' => $connectTimeoutMS,
                 ));
@@ -403,7 +403,7 @@ class MongoDBResourceManager
      */
     public function setFsync($id, $fsync)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'fsync' => $fsync,
                 ));
@@ -430,7 +430,7 @@ class MongoDBResourceManager
      */
     public function setJournal($id, $journal)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'journal' => $journal,
                 ));
@@ -457,7 +457,7 @@ class MongoDBResourceManager
      */
     public function setUsername($id, $username)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'username' => $username,
                 ));
@@ -484,7 +484,7 @@ class MongoDBResourceManager
      */
     public function setPassword($id, $password)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'password' => $password,
                 ));
@@ -511,7 +511,7 @@ class MongoDBResourceManager
      */
     public function setReadPreference($id, $readPreference)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'readPreference' => $readPreference,
                 ));
@@ -538,7 +538,7 @@ class MongoDBResourceManager
      */
     public function setReadPreferenceTags($id, $readPreferenceTags)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'readPreferenceTags' => $readPreferenceTags,
                 ));
@@ -565,7 +565,7 @@ class MongoDBResourceManager
      */
     public function setSocketTimeoutMS($id, $socketTimeoutMS)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'socketTimeoutMS' => $socketTimeoutMS,
                 ));
@@ -592,7 +592,7 @@ class MongoDBResourceManager
      */
     public function setSsl($id, $ssl)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'ssl' => $ssl,
                 ));
@@ -619,7 +619,7 @@ class MongoDBResourceManager
      */
     public function setW($id, $w)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'w' => $w,
                 ));
@@ -646,7 +646,7 @@ class MongoDBResourceManager
      */
     public function setWTimeoutMS($id, $wTimeoutMS)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             return $this->setResource($id, array(
                     'wTimeoutMS' => $wTimeoutMS,
                 ));
@@ -740,7 +740,7 @@ class MongoDBResourceManager
                 }
                 break;
             case 'w':
-                if (!is_int($value) && !is_string($value) && !is_array($value)) {
+                if (! is_int($value) && !is_string($value) && !is_array($value)) {
                     throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
                 }
                 break;
@@ -812,7 +812,7 @@ class MongoDBResourceManager
      */
     protected function getClientOption($id, $option)
     {
-        if (!$this->hasResource($id)) {
+        if (! $this->hasResource($id)) {
             throw new Exception\RuntimeException("No resource with id '{$id}'");
         }
 
@@ -830,7 +830,7 @@ class MongoDBResourceManager
      */
     protected function normalizeServers(& $servers)
     {
-        if (!is_array($servers) && !$servers instanceof Traversable) {
+        if (! is_array($servers) && !$servers instanceof Traversable) {
             throw new Exception\InvalidArgumentException("Invalid servers given");
         }
 
@@ -869,7 +869,7 @@ class MongoDBResourceManager
             }
 
             // array('host' => <host>[, 'port' => <port>])
-            if (!isset($server[0]) && isset($server['host'])) {
+            if (! isset($server[0]) && isset($server['host'])) {
                 $host = (string) $server['host'];
                 $port = isset($server['port']) ? (int) $server['port'] : $port;
             }

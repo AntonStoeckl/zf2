@@ -57,7 +57,7 @@ class MongoDBTest extends CommonAdapterTest
 
         if (defined('TESTS_ZEND_CACHE_MONGODB_DATABASE')) {
             $this->_options->getResourceManager()
-                ->setDB(
+                ->setDb(
                     __CLASS__,
                     TESTS_ZEND_CACHE_MONGODB_DATABASE
                 );
@@ -73,7 +73,7 @@ class MongoDBTest extends CommonAdapterTest
                 ->setPassword(
                     __CLASS__,
                     TESTS_ZEND_CACHE_MONGODB_PASSWORD
-            );
+                );
         }
 
         $this->_storage = new Cache\Storage\Adapter\MongoDB();
@@ -101,8 +101,9 @@ class MongoDBTest extends CommonAdapterTest
         $this->_storage->removeItem($key);
         $this->assertNull($this->_storage->getItem($key));
         $this->_storage->setItem($key, serialize(array('test', array('one', 'two'))));
+        $actual = unserialize($this->_storage->getItem($key));
 
-        $this->assertCount(2, unserialize($this->_storage->getItem($key)), 'Get item should return array of two elements');
+        $this->assertCount(2, $actual, 'Get item should return array of two elements');
 
         $expectedVals = array(
             'key1' => 'val1',
@@ -115,7 +116,7 @@ class MongoDBTest extends CommonAdapterTest
         $this->assertCount(
             3,
             $this->_storage->getItems(array_keys($expectedVals)),
-                'Multiple set/get items didnt save correct amount of rows'
+            'Multiple set/get items didnt save correct amount of rows'
         );
     }
 

@@ -55,8 +55,8 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     public function __construct($options = null)
     {
         if (static::$extMongoDBVersion === null) {
-            $v = (string) phpversion('mongo');
-            static::$extMongoDBVersion = (int) str_replace('.', '', $v);
+            $version = (string) phpversion('mongo');
+            static::$extMongoDBVersion = (int) str_replace('.', '', $version);
         }
 
         if (static::$extMongoDBVersion < 141) {
@@ -100,7 +100,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     {
         $mongoClient = $this->getMongoDBResource();
 
-        return $mongoClient->selectDB($this->resourceManager->getDB($this->resourceId));
+        return $mongoClient->selectDB($this->resourceManager->getDb($this->resourceId));
     }
 
     /**

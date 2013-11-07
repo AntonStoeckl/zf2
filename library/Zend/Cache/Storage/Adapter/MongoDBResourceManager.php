@@ -12,6 +12,7 @@ namespace Zend\Cache\Storage\Adapter;
 use MongoClient as MongoDBResource;
 use Traversable;
 use Zend\Cache\Exception;
+use Zend\Soap\Exception\InvalidArgumentException;
 use Zend\Stdlib\ArrayUtils;
 use \Zend\Validator;
 
@@ -70,28 +71,28 @@ class MongoDBResourceManager
     /**
      * Check if a resource exists
      *
-     * @param string $id
+     * @param string $resourceId
      * @return bool
      */
-    public function hasResource($id)
+    public function hasResource($resourceId)
     {
-        return isset($this->resources[$id]);
+        return isset($this->resources[$resourceId]);
     }
 
     /**
      * Gets a mongo resource
      *
-     * @param string $id
+     * @param string $resourceId
      * @return MongoDBResource
      * @throws Exception\RuntimeException
      */
-    public function getResource($id)
+    public function getResource($resourceId)
     {
-        if (! $this->hasResource($id)) {
-            throw new Exception\RuntimeException("No resource with id '{$id}'");
+        if (! $this->hasResource($resourceId)) {
+            throw new Exception\RuntimeException("No resource with id '{$resourceId}'");
         }
 
-        $resource = & $this->resources[$id];
+        $resource = & $this->resources[$resourceId];
 
         if (array_key_exists('client', $resource)) {
             if ($resource['client'] instanceof MongoDBResource && $resource['initialized'] === true) {
@@ -103,7 +104,7 @@ class MongoDBResourceManager
         $resource['initialized'] = true;
 
         // buffer and return
-        $this->resources[$id]['client'] = $mongoc;
+        $this->resources[$resourceId]['client'] = $mongoc;
 
         return $mongoc;
     }
@@ -111,14 +112,14 @@ class MongoDBResourceManager
     /**
      * Set a resource
      *
-     * @param string $id
+     * @param string $resourceId
      * @param array|Traversable|MongoDBResource $resource
      * @return MongoDBResourceManager Fluent interface
      * @throws Exception\InvalidArgumentException
      */
-    public function setResource($id, $resource)
+    public function setResource($resourceId, $resource)
     {
-        $id = (string) $id;
+        $resourceId = (string) $resourceId;
 
         if (! $resource instanceof MongoDBResource) {
             if ($resource instanceof Traversable) {
@@ -129,7 +130,7 @@ class MongoDBResourceManager
                 );
             }
 
-            $this->resources[$id]['initialized'] = false;
+            $this->resources[$resourceId]['initialized'] = false;
 
             foreach (static::$defaultClientOptions as $key => $value) {
                 if (array_key_exists($key, $resource)) {
@@ -137,15 +138,15 @@ class MongoDBResourceManager
                 }
 
                 if (null !== $value) {
-                    $this->setClientOption($id, $key, $value);
+                    $this->doSetClientOption($resourceId, $key, $value);
                 }
             }
 
             if (! empty($resource['servers'])) {
-                $this->setServersOption($id, $resource['servers']);
+                $this->setServersOption($resourceId, $resource['servers']);
             } else {
                 $this->setServersOption(
-                    $id,
+                    $resourceId,
                     array(
                         array(
                             'host' => self::$defaultServer['host'],
@@ -156,13 +157,13 @@ class MongoDBResourceManager
             }
 
             if (! empty($resource['collection'])) {
-                $this->setCollection($id, $resource['collection']);
+                $this->setCollection($resourceId, $resource['collection']);
             } else {
-                $this->setCollection($id, self::$defaultCollection);
+                $this->setCollection($resourceId, self::$defaultCollection);
             }
         } else {
-            $this->resources[$id]['initialized'] = true;
-            $this->resources[$id]['client'] = $resource;
+            $this->resources[$resourceId]['initialized'] = true;
+            $this->resources[$resourceId]['client'] = $resource;
         }
 
         return $this;
@@ -171,12 +172,12 @@ class MongoDBResourceManager
     /**
      * Remove a resource
      *
-     * @param string $id
+     * @param string $resourceId
      * @return MongoDBResourceManager Fluent interface
      */
-    public function removeResource($id)
+    public function removeResource($resourceId)
     {
-        unset($this->resources[$id]);
+        unset($this->resources[$resourceId]);
 
         return $this;
     }
@@ -208,38 +209,52 @@ class MongoDBResourceManager
      * - Assoc: array('host' => <host>[, 'port' => <port>])
      * - List:  array(<host>[, <port>])
      *
-     * @param string       $id
+     * @param string       $resourceId
      * @param string|array $servers
      * @return MongoDBResourceManager
      */
-    public function setServers($id, $servers)
+    public function setServers($resourceId, $servers)
     {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
+        if (! $this->hasResource($resourceId)) {
+            return $this->setResource($resourceId, array(
                     'servers' => $servers
                 ));
         }
 
         // normalize, validate and set servers param
-        $this->setServersOption($id, $servers);
+        $this->setServersOption($resourceId, $servers);
 
         return $this;
     }
 
     /**
+     * Setter for field 'servers' in the resources array.
+     *
+     * @param string $resourceId
+     * @param Traversable|array $servers
+     */
+    protected function setServersOption($resourceId, $servers)
+    {
+        $this->normalizeServers($servers);
+        $resource = & $this->resources[$resourceId];
+        $resource['servers'] = $servers;
+        $resource['initialized'] = false;
+    }
+
+    /**
      * Get servers
      *
-     * @param string $id
+     * @param string $resourceId
      * @throws Exception\RuntimeException
      * @return array
      */
-    public function getServers($id)
+    public function getServers($resourceId)
     {
-        if (! $this->hasResource($id)) {
-            throw new Exception\RuntimeException("No resource with id '{$id}'");
+        if (! $this->hasResource($resourceId)) {
+            throw new Exception\RuntimeException("No resource with id '{$resourceId}'");
         }
 
-        $resource = & $this->resources[$id];
+        $resource = & $this->resources[$resourceId];
 
         if ($resource instanceof MongoDBResource) {
             /**
@@ -252,74 +267,22 @@ class MongoDBResourceManager
     }
 
     /**
-     * @param $id
-     * @param $replicaSet
+     * Setter for field 'collection' in the resources array.
+     *
+     * @param string $resourceId
+     * @param string $collection
      * @return $this|MongoDBResourceManager
      */
-    public function setReplicaSet($id, $replicaSet)
+    public function setCollection($resourceId, $collection)
     {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'replicaSet' => $replicaSet,
-                ));
-        }
-
-        $this->setClientOption($id, 'replicaSet', $replicaSet);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getReplicaSet($id)
-    {
-        return $this->getClientOption($id, 'replicaSet');
-    }
-
-    /**
-     * @param $id
-     * @param $db
-     * @return $this|MongoDBResourceManager
-     */
-    public function setDB($id, $db)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'db' => $db,
-                ));
-        }
-
-        $this->setClientOption($id, 'db', $db);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getDB($id)
-    {
-        return $this->getClientOption($id, 'db');
-    }
-
-    /**
-     * @param $id
-     * @param $collection
-     * @return $this|MongoDBResourceManager
-     */
-    public function setCollection($id, $collection)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
+        if (! $this->hasResource($resourceId)) {
+            return $this->setResource($resourceId, array(
                     'collection' => $collection,
                 ));
         }
 
         $this->validateClientOption('collection', $collection);
-        $resource = & $this->resources[$id];
+        $resource = & $this->resources[$resourceId];
         $resource['collection'] = $collection;
         $resource['initialized'] = false;
 
@@ -327,368 +290,140 @@ class MongoDBResourceManager
     }
 
     /**
-     * @param $id
+     * Getter for field 'collection' in the resources array.
+     *
+     * @param string $resourceId
      * @return string
      * @throws Exception\RuntimeException
      */
-    public function getCollection($id)
+    public function getCollection($resourceId)
     {
-        if (! $this->hasResource($id)) {
-            throw new Exception\RuntimeException("No resource with id '{$id}'");
+        if (! $this->hasResource($resourceId)) {
+            throw new Exception\RuntimeException("No resource with id '{$resourceId}'");
         }
 
-        $resource = & $this->resources[$id];
+        $resource = & $this->resources[$resourceId];
 
         return $resource['collection'];
     }
 
     /**
-     * @param $id
-     * @param $connect
-     * @return $this|MongoDBResourceManager
-     */
-    public function setConnect($id, $connect)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'connect' => $connect,
-                ));
-        }
-
-        $this->setClientOption($id, 'connect', $connect);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getConnect($id)
-    {
-        return $this->getClientOption($id, 'connect');
-    }
-
-    /**
-     * @param $id
-     * @param $connectTimeoutMS
-     * @return $this|MongoDBResourceManager
-     */
-    public function setConnectTimeoutMS($id, $connectTimeoutMS)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'connectTimeoutMS' => $connectTimeoutMS,
-                ));
-        }
-
-        $this->setClientOption($id, 'connectTimeoutMS', $connectTimeoutMS);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getConnectTimeoutMS($id)
-    {
-        return $this->getClientOption($id, 'connectTimeoutMS');
-    }
-
-    /**
-     * @param $id
-     * @param $fsync
-     * @return $this|MongoDBResourceManager
-     */
-    public function setFsync($id, $fsync)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'fsync' => $fsync,
-                ));
-        }
-
-        $this->setClientOption($id, 'fsync', $fsync);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getFsync($id)
-    {
-        return $this->getClientOption($id, 'fsync');
-    }
-
-    /**
-     * @param $id
-     * @param $journal
-     * @return $this|MongoDBResourceManager
-     */
-    public function setJournal($id, $journal)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'journal' => $journal,
-                ));
-        }
-
-        $this->setClientOption($id, 'journal', $journal);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getJournal($id)
-    {
-        return $this->getClientOption($id, 'journal');
-    }
-
-    /**
-     * @param $id
-     * @param $username
-     * @return $this|MongoDBResourceManager
-     */
-    public function setUsername($id, $username)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'username' => $username,
-                ));
-        }
-
-        $this->setClientOption($id, 'username', $username);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getUsername($id)
-    {
-        return $this->getClientOption($id, 'username');
-    }
-
-    /**
-     * @param $id
-     * @param $password
-     * @return $this|MongoDBResourceManager
-     */
-    public function setPassword($id, $password)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'password' => $password,
-                ));
-        }
-
-        $this->setClientOption($id, 'password', $password);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getPassword($id)
-    {
-        return $this->getClientOption($id, 'password');
-    }
-
-    /**
-     * @param $id
-     * @param $readPreference
-     * @return $this|MongoDBResourceManager
-     */
-    public function setReadPreference($id, $readPreference)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'readPreference' => $readPreference,
-                ));
-        }
-
-        $this->setClientOption($id, 'readPreference', $readPreference);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getReadPreference($id)
-    {
-        return $this->getClientOption($id, 'readPreference');
-    }
-
-    /**
-     * @param $id
-     * @param $readPreferenceTags
-     * @return $this|MongoDBResourceManager
-     */
-    public function setReadPreferenceTags($id, $readPreferenceTags)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'readPreferenceTags' => $readPreferenceTags,
-                ));
-        }
-
-        $this->setClientOption($id, 'readPreferenceTags', $readPreferenceTags);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getReadPreferenceTags($id)
-    {
-        return $this->getClientOption($id, 'readPreferenceTags');
-    }
-
-    /**
-     * @param $id
-     * @param $socketTimeoutMS
-     * @return $this|MongoDBResourceManager
-     */
-    public function setSocketTimeoutMS($id, $socketTimeoutMS)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'socketTimeoutMS' => $socketTimeoutMS,
-                ));
-        }
-
-        $this->setClientOption($id, 'socketTimeoutMS', $socketTimeoutMS);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getSocketTimeoutMS($id)
-    {
-        return $this->getClientOption($id, 'socketTimeoutMS');
-    }
-
-    /**
-     * @param $id
-     * @param $ssl
-     * @return $this|MongoDBResourceManager
-     */
-    public function setSsl($id, $ssl)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'ssl' => $ssl,
-                ));
-        }
-
-        $this->setClientOption($id, 'ssl', $ssl);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getSsl($id)
-    {
-        return $this->getClientOption($id, 'ssl');
-    }
-
-    /**
-     * @param $id
-     * @param $w
-     * @return $this|MongoDBResourceManager
-     */
-    public function setW($id, $w)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'w' => $w,
-                ));
-        }
-
-        $this->setClientOption($id, 'w', $w);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getW($id)
-    {
-        return $this->getClientOption($id, 'w');
-    }
-
-    /**
-     * @param $id
-     * @param $wTimeoutMS
-     * @return $this|MongoDBResourceManager
-     */
-    public function setWTimeoutMS($id, $wTimeoutMS)
-    {
-        if (! $this->hasResource($id)) {
-            return $this->setResource($id, array(
-                    'wTimeoutMS' => $wTimeoutMS,
-                ));
-        }
-
-        $this->setClientOption($id, 'wTimeoutMS', $wTimeoutMS);
-
-        return $this;
-    }
-
-    /**
-     * @param $id
-     * @return mixed
-     */
-    public function getWTimeoutMS($id)
-    {
-        return $this->getClientOption($id, 'wTimeoutMS');
-    }
-
-    /**
-     * @param $id
-     * @param $servers
-     */
-    protected function setServersOption($id, $servers)
-    {
-        $this->normalizeServers($servers);
-        $resource = & $this->resources[$id];
-        $resource['servers'] = $servers;
-        $resource['initialized'] = false;
-    }
-
-    /**
-     * Set a client option in resources.
+     * Magic method, so we don't have to implement getters and setters for each possible
+     * option for @see \MongoClient.
+     * This only accepts methods that start with get or set, followed by a capital letter and calls
+     * @see MongoDBResourceManager::setClientOption()
+     * or
+     * @see MongoDBResourceManager::getClientOption()
+     * with the extracted option name and the supplied args array.
      *
-     * @param $id
-     * @param $option
-     * @param $value
+     * @param string $methodName
+     * @param array $args
+     * @return $this|mixed
+     * @throws Exception\InvalidArgumentException
      */
-    protected function setClientOption($id, $option, $value)
+    public function __call($methodName, array $args)
+    {
+        if (preg_match('/^set([A-Z][a-zA-Z]*)$/', $methodName, $matches)) {
+            $optionName = lcfirst($matches[1]);
+            $result = $this->setClientOption($optionName, $args);
+        } elseif (preg_match('/^get([A-Z][a-zA-Z]*)$/', $methodName, $matches)) {
+            $optionName = lcfirst($matches[1]);
+            $result = $this->getClientOption($optionName, $args);
+        } else {
+            throw new Exception\InvalidArgumentException('Invalid method name called');
+        }
+
+        return $result;
+    }
+
+    /**
+     * Proxy setter for client options, this is called from
+     * @see MongoDBResourceManager::__call()
+     * It evaluates the number of args and calls
+     * @see MongoDBResourceManager::doSetClientOption()
+     *
+     * @param string $optionName
+     * @param array $args
+     * @return $this
+     * @throws Exception\InvalidArgumentException
+     */
+    protected function setClientOption($optionName, array $args)
+    {
+        if (count($args) !== 2) {
+            throw new Exception\InvalidArgumentException(
+                'Invalid argument count, "resourceId" and "optionValue" required'
+            );
+        }
+
+        $resourceId = array_shift($args);
+        $optionValue = array_shift($args);
+
+        if (! $this->hasResource($resourceId)) {
+            return $this->setResource($resourceId, array(
+                    $optionName => $optionValue,
+                ));
+        }
+
+        $this->doSetClientOption($resourceId, $optionName, $optionValue);
+
+        return $this;
+    }
+
+    /**
+     * Proxy getter for client options, this is called from
+     * @see MongoDBResourceManager::__call()
+     * It evaluates the number of args and calls
+     * @see MongoDBResourceManager::doGetClientOption()
+     *
+     * @param string $optionName
+     * @param array $args
+     * @return mixed
+     * @throws Exception\InvalidArgumentException
+     */
+    protected function getClientOption($optionName, array $args)
+    {
+        if (count($args) !== 1) {
+            throw new Exception\InvalidArgumentException(
+                'Invalid argument count, "resourceId" required'
+            );
+        }
+
+        $resourceId = array_shift($args);
+
+        return $this->doGetClientOption($resourceId, $optionName);
+    }
+
+    /**
+     * Real getter for client options.
+     * Checks first if a resource with this id exists.
+     *
+     * @param string $resourceId
+     * @param string $option
+     * @return mixed
+     * @throws Exception\RuntimeException
+     */
+    protected function doGetClientOption($resourceId, $option)
+    {
+        if (! $this->hasResource($resourceId)) {
+            throw new Exception\RuntimeException("No resource with id '{$resourceId}'");
+        }
+
+        $resource = & $this->resources[$resourceId];
+
+        return $resource['client_options'][$option];
+    }
+
+    /**
+     * Real setter for client options in resources array.
+     *
+     * @param string $resourceId
+     * @param string $option
+     * @param mixed $value
+     */
+    protected function doSetClientOption($resourceId, $option, $value)
     {
         $this->validateClientOption($option, $value);
-        $resource = & $this->resources[$id];
+        $resource = & $this->resources[$resourceId];
         $resource['client_options'][$option] = $value;
         $resource['initialized'] = false;
     }
@@ -696,9 +431,9 @@ class MongoDBResourceManager
     /**
      * Validate a client option value.
      *
-     * @param $option
-     * @param $value
-     * @throws \Zend\Cache\Exception\RuntimeException
+     * @param string $option
+     * @param mixed $value
+     * @throws Exception\InvalidArgumentException
      */
     protected function validateClientOption($option, $value)
     {
@@ -711,7 +446,7 @@ class MongoDBResourceManager
             case 'username':
             case 'password':
                 if (! $this->validators['string']->isValid($value)) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             case 'connect':
@@ -719,51 +454,62 @@ class MongoDBResourceManager
             case 'journal':
             case 'ssl':
                 if (! $this->validators['bool']->isValid($value)) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             case 'connectTimeoutMS':
             case 'socketTimeoutMS':
             case 'wTimeoutMS':
                 if (! $this->validators['int']($value) === true) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             case 'readPreference':
                 if (! $this->validators['rp']->isValid($value) === true) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             case 'readPreferenceTags':
                 if (! $this->validators['rp_tags']($value) === true) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             case 'w':
                 if (! is_int($value) && !is_string($value) && !is_array($value)) {
-                    throw new Exception\RuntimeException("Invalid argument for '{$option}' option");
+                    throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             default:
+                throw new Exception\InvalidArgumentException("Unknown client option: '{$option}'");
         }
     }
 
     /**
      * Initialize the validators.
+     * Some are Zend\Validator(s), some are anonymous functions.
      */
     protected function initValidators()
     {
         $validators = & $this->validators;
 
         if (empty($validators)) {
+            /**
+             * Boolean validator, also accepts 1 and 0
+             */
             $item = new Validator\InArray();
             $item->setHaystack(array(true, false, 1, 0));
             $validators['bool'] = $item;
 
+            /**
+             * String validator.
+             */
             $item = new Validator\StringLength();
             $item->setMin(1);
             $validators['string'] = $item;
 
+            /**
+             * Integer validator, also accepting integerish strings
+             */
             $item = function ($value) {
                 if (strval(intval($value)) != $value || is_bool($value) || is_null($value)) {
                     return false;
@@ -773,6 +519,9 @@ class MongoDBResourceManager
             };
             $validators['int'] = $item;
 
+            /**
+             * Validates MongoDB "Read Preferences"
+             */
             $item = new Validator\InArray();
             $item->setHaystack(
                 array(
@@ -785,8 +534,11 @@ class MongoDBResourceManager
             );
             $validators['rp'] = $item;
 
+            /**
+             * Validates MongoDB "Read Preference Tags"
+             */
             $item = function ($value) {
-                if (is_array($value) || empty($value)) {
+                if (! is_array($value) || empty($value)) {
                     return false;
                 }
 
@@ -802,23 +554,6 @@ class MongoDBResourceManager
             };
             $validators['rp_tags'] = $item;
         }
-    }
-
-    /**
-     * @param $id
-     * @param $option
-     * @return mixed
-     * @throws \Zend\Cache\Exception\RuntimeException
-     */
-    protected function getClientOption($id, $option)
-    {
-        if (! $this->hasResource($id)) {
-            throw new Exception\RuntimeException("No resource with id '{$id}'");
-        }
-
-        $resource = & $this->resources[$id];
-
-        return $resource['client_options'][$option];
     }
 
     /**
@@ -849,7 +584,6 @@ class MongoDBResourceManager
      * array('host' => <host>, 'port' => <port>)
      *
      * @param Traversable|array $server
-     * @throws Exception\InvalidArgumentException
      */
     protected function normalizeServer(& $server)
     {

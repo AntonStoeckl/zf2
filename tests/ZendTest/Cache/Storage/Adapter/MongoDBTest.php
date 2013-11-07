@@ -17,13 +17,13 @@ class MongoDBTest extends CommonAdapterTest
     /**
      * @var Cache\Storage\Adapter\MongoDBOptions
      */
-    protected $options;
+    protected $_options;
 
     /**
      *
      * @var Cache\Storage\Adapter\MongoDB
      */
-    protected $storage;
+    protected $_storage;
 
     /**
      * Set up.

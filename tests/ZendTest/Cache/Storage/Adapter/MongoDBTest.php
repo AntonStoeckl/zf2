@@ -10,6 +10,7 @@
 namespace ZendTest\Cache\Storage\Adapter;
 
 use Zend\Cache;
+use MongoClient as MongoDBResource;
 
 class MongoDBTest extends CommonAdapterTest
 {
@@ -92,9 +93,9 @@ class MongoDBTest extends CommonAdapterTest
         parent::tearDown();
     }
 
-    /* MongoDB */
+    /* MongoDB Storage */
 
-    public function testMongoCacheStore()
+    public function testMongoCacheStoreSuccessCase()
     {
         $key = 'singleKey';
         //assure that there's nothing under key
@@ -120,62 +121,72 @@ class MongoDBTest extends CommonAdapterTest
         );
     }
 
-    public function testRedisSerializer()
+    public function testMongoSerializerSuccessCase()
     {
         $this->_storage->addPlugin(new \Zend\Cache\Storage\Plugin\Serializer());
-        $value = array('test', 'of', 'array');
+        $value = (object) array('foo' => 'bar');
         $this->_storage->setItem('key', $value);
 
-        $this->assertCount(count($value), $this->_storage->getItem('key'), 'Problem with Redis serialization');
+        $this->assertEquals($value, $this->_storage->getItem('key'), 'Problem with serialization');
     }
 
-    public function testRedisSetInt()
+    public function testMongoStorageGetSetStringSuccessCase()
+    {
+        $key = 'key';
+        $this->assertTrue($this->_storage->setItem($key, '123.12'));
+        $this->assertEquals('123.12', $this->_storage->getItem($key), 'Problem with storing / retreiving a string');
+    }
+
+    public function testMongoStorageGetSetIntSuccessCase()
     {
         $key = 'key';
         $this->assertTrue($this->_storage->setItem($key, 123));
-        $this->assertEquals('123', $this->_storage->getItem($key), 'Integer should be cast to string');
+        $this->assertEquals(123, $this->_storage->getItem($key), 'Problem with storing / retreiving an integer');
     }
 
-    public function testRedisSetDouble()
+    public function testMongoStorageGetSetDoubleSuccessCase()
     {
         $key = 'key';
         $this->assertTrue($this->_storage->setItem($key, 123.12));
-        $this->assertEquals('123.12', $this->_storage->getItem($key), 'Integer should be cast to string');
+        $this->assertEquals(123.12, $this->_storage->getItem($key), 'Problem with storing / retreiving a double');
     }
 
-    public function testRedisSetNull()
+    public function testMongoStorageGetSetNullSuccessCase()
     {
         $key = 'key';
         $this->assertTrue($this->_storage->setItem($key, null));
-        $this->assertEquals('', $this->_storage->getItem($key), 'Null should be cast to string');
+        $this->assertEquals(null, $this->_storage->getItem($key), 'Problem with storing / retreiving a null value');
     }
 
-    public function testRedisSetBoolean()
+    public function testMongoStorageGetSetBooleanSuccessCase()
     {
         $key = 'key';
         $this->assertTrue($this->_storage->setItem($key, true));
-        $this->assertEquals('1', $this->_storage->getItem($key), 'Boolean should be cast to string');
+        $this->assertEquals(true, $this->_storage->getItem($key), 'Problem with storing / retreiving a boolean true');
         $this->assertTrue($this->_storage->setItem($key, false));
-        $this->assertEquals('', $this->_storage->getItem($key), 'Boolean should be cast to string');
+        $this->assertEquals(false, $this->_storage->getItem($key), 'Problem with storing / retreiving a boolean false');
     }
 
-    public function testGetCapabilitiesTtl()
+    public function testMongoStorageGetSetArraySuccessCase()
     {
-        $host = defined('TESTS_ZEND_CACHE_REDIS_HOST') ? TESTS_ZEND_CACHE_REDIS_HOST : '127.0.0.1';
-        $port = defined('TESTS_ZEND_CACHE_REDIS_PORT') ? TESTS_ZEND_CACHE_REDIS_PORT : 6379;
-        $redisResource = new RedisResource();
-        $redisResource->connect($host, $port);
-        $info = $redisResource->info();
-        $majorVersion = (int) $info['redis_version'];
+        $key = 'key';
+        $value = array('foo', 'bar', 'a_foo' => 'a-bar');
+        $this->assertTrue($this->_storage->setItem($key, $value));
+        $this->assertEquals($value, $this->_storage->getItem($key), 'Problem with storing / retreiving an array');
+    }
 
-        $this->assertEquals($majorVersion, $this->_options->getResourceManager()->getMajorVersion($this->_options->getResourceId()));
+    public function testMongoStorageGetCapabilitiesSuccessCase()
+    {
+        $reflObject = new \ReflectionObject($this->_storage);
+        $reflProp = $reflObject->getProperty('capabilities');
+        $reflProp->setAccessible(true);
+        $reflProp->setValue($this->_storage, null);
 
         $capabilities = $this->_storage->getCapabilities();
-        if ($majorVersion < 2) {
-            $this->assertEquals(0, $capabilities->getMinTtl(), 'Redis version < 2.0.0 does not support key expiration');
-        } else {
-            $this->assertEquals(1, $capabilities->getMinTtl(), 'Redis version > 2.0.0 supports key expiration');
-        }
+        $this->assertInstanceOf('Zend\Cache\Storage\Capabilities', $capabilities, 'Problem getting capabilities');
+
+        $capabilities = $reflProp->getValue($this->_storage);
+        $this->assertInstanceOf('Zend\Cache\Storage\Capabilities', $capabilities, 'Capabilities property was not set');
     }
 
     /* ResourceManager */

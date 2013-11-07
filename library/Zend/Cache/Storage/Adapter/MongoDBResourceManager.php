@@ -12,7 +12,6 @@ namespace Zend\Cache\Storage\Adapter;
 use MongoClient as MongoDBResource;
 use Traversable;
 use Zend\Cache\Exception;
-use Zend\Soap\Exception\InvalidArgumentException;
 use Zend\Stdlib\ArrayUtils;
 use \Zend\Validator;
 

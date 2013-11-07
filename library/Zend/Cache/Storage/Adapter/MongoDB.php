@@ -341,7 +341,28 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalAddItem(& $normalizedKey, & $value)
     {
-        return $this->internalSetItem($normalizedKey, $value);
+        $mongoc = $this->getMongoCollection();
+
+        $options = array();
+
+        $data = array(
+            'uid' => $normalizedKey,
+            'value' => $value
+        );
+
+        $ttl = (int) $this->getOptions()->getTtl();
+
+        if ($ttl > 0) {
+            $data['expire'] = new \MongoDate(time() + $ttl);
+        }
+
+        $result = $mongoc->insert( $data, $options);
+
+        if (true !== $result) {
+            $this->checkResult($result);
+        }
+
+        return true;
     }
 
     /**
@@ -424,10 +445,14 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
                         'double'   => true,
                         'string'   => true,
                         'array'    => true,
-                        'object'   => 'object',
+                        'object'   => 'array',
                         'resource' => false,
                     ),
-                    'supportedMetadata'  => array(),
+                    'supportedMetadata' => array(
+                        'internal_key',
+                        'atime', 'ctime', 'mtime', 'rtime',
+                        'size', 'hits', 'ttl',
+                    ),
                     'minTtl'             => 1,
                     'maxTtl'             => 0,
                     'staticTtl'          => true,

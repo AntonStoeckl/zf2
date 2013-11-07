@@ -181,10 +181,6 @@ class MongoDBTest extends CommonAdapterTest
         $this->assertEquals($value, $this->_storage->getItem($key), 'Problem with storing / retreiving an array');
     }
 
-    public function testFoo()
-    {
-        parent::testSetAndGetItemOfDifferentTypes();
-    }
 
     /* ResourceManager */
 

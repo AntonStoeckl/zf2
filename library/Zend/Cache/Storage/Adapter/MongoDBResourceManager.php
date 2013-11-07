@@ -280,7 +280,10 @@ class MongoDBResourceManager
                 ));
         }
 
-        $this->validateClientOption('collection', $collection);
+        if (($result = $this->validateClientOption('collection', $collection) !== true)) {
+            $collection = $result;
+        }
+
         $resource = & $this->resources[$resourceId];
         $resource['collection'] = $collection;
         $resource['initialized'] = false;
@@ -429,9 +432,12 @@ class MongoDBResourceManager
 
     /**
      * Validate a client option value.
+     * Return bool if value is valid.
+     * Some options return a sane default if the value is invalid.
      *
      * @param string $option
      * @param mixed $value
+     * @return bool|string
      * @throws Exception\InvalidArgumentException
      */
     protected function validateClientOption($option, $value)
@@ -441,11 +447,15 @@ class MongoDBResourceManager
         switch ($option) {
             case 'replicaSet':
             case 'db':
-            case 'collection':
             case 'username':
             case 'password':
                 if (! $this->validators['string']->isValid($value)) {
                     throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
+                }
+                break;
+            case 'collection':
+                if (! $this->validators['string']->isValid($value)) {
+                    return self::$defaultCollection;
                 }
                 break;
             case 'connect':
@@ -474,13 +484,15 @@ class MongoDBResourceManager
                 }
                 break;
             case 'w':
-                if (! is_int($value) && !is_string($value) && !is_array($value)) {
+                if (! $this->validators['w']($value) === true) {
                     throw new Exception\InvalidArgumentException("Invalid argument for '{$option}' option");
                 }
                 break;
             default:
                 throw new Exception\InvalidArgumentException("Unknown client option: '{$option}'");
         }
+
+        return true;
     }
 
     /**
@@ -552,6 +564,27 @@ class MongoDBResourceManager
                 return true;
             };
             $validators['rp_tags'] = $item;
+
+            /**
+             * Validates MongoDB "Write Concerns"
+             */
+            $item = function ($value) use (& $validators) {
+                if ($validators['int']($value) === true) {
+                    if (1 <= $value) {
+                        return true;
+                    }
+                } elseif (is_array($value)) {
+                    foreach ($value as $vItem) {
+                        if (! $validators['string']($vItem)) {
+                            return false;
+                        }
+                    }
+                } elseif ($value == 'majority') {
+                    return true;
+                }
+                return false;
+            };
+            $validators['w'] = $item;
         }
     }
 

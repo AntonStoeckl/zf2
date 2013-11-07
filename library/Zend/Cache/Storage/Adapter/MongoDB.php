@@ -191,7 +191,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             array('value' => true, 'expire' => true)
         );
 
-        if ($data === null || $this->notExpired($data) === false) {
+        if ($data === null || $this->isNotExpired($data) === false) {
             $success = false;
             return null;
         }
@@ -221,7 +221,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         $result = array();
 
         foreach ($cursor as $item) {
-            if ($this->notExpired($item)) {
+            if ($this->isNotExpired($item) === true) {
                 $result[$item['uid']] = $item['value'];
             }
         }
@@ -244,7 +244,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             array('expire' => true)
         );
 
-        if ($data === null || $this->notExpired($data) === false) {
+        if ($data === null || $this->isNotExpired($data) === false) {
             return false;
         }
 
@@ -271,7 +271,7 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         $result = array();
 
         foreach ($cursor as $item) {
-            if ($this->notExpired($item) === false) {
+            if ($this->isNotExpired($item) === true) {
                 $result[] = $item['uid'];
             }
         }
@@ -371,6 +371,10 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
 
         if (true !== $result) {
             $this->checkResult($result);
+
+            if ($result['n'] == 0) {
+                return false;
+            }
         }
 
         return true;
@@ -385,11 +389,17 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      */
     protected function internalRemoveItems(array & $normalizedKeys)
     {
+        $notRemovedKeys = array();
+
         foreach ($normalizedKeys as $normalizedKey) {
-            $this->internalRemoveItem($normalizedKey);
+            $result = $this->internalRemoveItem($normalizedKey);
+
+            if ($result !== true) {
+                $notRemovedKeys[] = $normalizedKey;
+            }
         }
 
-        return array();
+        return $notRemovedKeys;
     }
 
     /* status */
@@ -441,17 +451,19 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
      * @param array $value
      * @return bool
      */
-    protected function notExpired(array $value)
+    protected function isNotExpired(array $value)
     {
         if (array_key_exists('expire', $value) && $value['expire'] instanceof \MongoDate) {
-            /** @var \MongoDate $date */
-            $date = $value['expire'];
+            /** @var \MongoDate $expireDate */
+            $expireDate = $value['expire'];
 
-            if ($date->sec >= time()) {
+            // expireDate is in the past -> item is expired
+            if ($expireDate->sec < time()) {
                 return false;
             }
         }
 
+        // expire date is _not_ in the past or is not set at all -> item is still valid
         return true;
     }
 

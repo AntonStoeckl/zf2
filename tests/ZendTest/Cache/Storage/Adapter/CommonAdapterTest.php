@@ -633,6 +633,9 @@ abstract class CommonAdapterTest extends \PHPUnit_Framework_TestCase
             if ($targetType === true) {
                 $this->assertSame($value, $this->_storage->getItem('key'));
             } elseif (is_string($targetType)) {
+                if ($sourceType === 'object') {
+                    settype($value->two, $targetType);
+                }
                 settype($value, $targetType);
                 $this->assertEquals($value, $this->_storage->getItem('key'));
             }

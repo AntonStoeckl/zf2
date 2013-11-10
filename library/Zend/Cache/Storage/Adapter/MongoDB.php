@@ -317,27 +317,12 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
     }
 
     /**
-     * Internal method to store multiple items.
-     *
-     * @param  array $normalizedKeyValuePairs
-     * @return array Array of not stored keys
-     * @throws Exception\ExceptionInterface
-     */
-    protected function internalSetItems(array & $normalizedKeyValuePairs)
-    {
-        foreach ($normalizedKeyValuePairs as $key => $value) {
-            $this->internalSetItem($key, $value);
-        }
-
-        return array();
-    }
-
-    /**
      * Add an item.
      *
      * @param  string $normalizedKey
      * @param  mixed  $value
      * @return bool
+     * @throws Exception\ExceptionInterface
      */
     protected function internalAddItem(& $normalizedKey, & $value)
     {
@@ -367,18 +352,6 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         }
 
         return true;
-    }
-
-    /**
-     * Internal method to replace an existing item.
-     *
-     * @param  string $normalizedKey
-     * @param  mixed  $value
-     * @return bool
-     */
-    protected function internalReplaceItem(& $normalizedKey, & $value)
-    {
-        return $this->internalSetItem($normalizedKey, $value);
     }
 
     /**

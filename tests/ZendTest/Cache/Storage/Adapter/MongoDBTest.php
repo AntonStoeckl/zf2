@@ -186,34 +186,30 @@ class MongoDBTest extends CommonAdapterTest
 
     public function testSocketConnection()
     {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $socket = '/tmp/redis.sock';
-        $this->_options->getResourceManager()->setServer($this->_options->getResourceId(), $socket);
-        $normalized = $this->_options->getResourceManager()->getServer($this->_options->getResourceId());
-        $this->assertEquals($socket, $normalized['host'], 'Host should equal to socket {$socket}');
+        $servers = array('/tmp/mongodb-27017.sock');
+        $this->_options->getResourceManager()->setServers($this->_options->getResourceId(), $servers);
+        $normalized = $this->_options->getResourceManager()->getServers($this->_options->getResourceId());
+        $normalized = array_values($normalized)[0];
+        $this->assertEquals('127.0.0.1', $normalized['host'], 'Host should be 127.0.0.1 on socket connection');
+        $this->assertEquals('27017', $normalized['port'], 'Port should be 27017 on socket connection');
 
         $this->_storage = null;
     }
 
     public function testGetSetDatabase()
     {
-        $this->markTestSkipped("Skipped by FooBar");
-
         $this->assertTrue($this->_storage->setItem('key', 'val'));
         $this->assertEquals('val', $this->_storage->getItem('key'));
 
-        $databaseNumber = 1;
+        $databaseName = 'foobar';
         $resourceManager = $this->_options->getResourceManager();
-        $resourceManager->setDatabase($this->_options->getResourceId(), $databaseNumber);
+        $resourceManager->setDb($this->_options->getResourceId(), $databaseName);
         $this->assertNull($this->_storage->getItem('key'), 'No value should be found because set was done on different database than get');
-        $this->assertEquals($databaseNumber, $resourceManager->getDatabase($this->_options->getResourceId()), 'Incorrect database was returned');
+        $this->assertEquals($databaseName, $resourceManager->getDb($this->_options->getResourceId()), 'Incorrect database was returned');
     }
 
     public function testGetSetPassword()
     {
-        $this->markTestSkipped("Skipped by FooBar");
-
         $pass = 'super secret';
         $this->_options->getResourceManager()->setPassword($this->_options->getResourceId(), $pass);
         $this->assertEquals(
@@ -268,35 +264,15 @@ class MongoDBTest extends CommonAdapterTest
 
     /* RedisOptions */
 
-    public function testGetSetNamespace()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $namespace = 'testNamespace';
-        $this->_options->setNamespace($namespace);
-        $this->assertEquals($namespace, $this->_options->getNamespace(), 'Namespace was not set correctly');
-    }
-
-    public function testGetSetNamespaceSeparator()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $separator = '/';
-        $this->_options->setNamespaceSeparator($separator);
-        $this->assertEquals($separator, $this->_options->getNamespaceSeparator(), 'Separator was not set correctly');
-    }
-
     public function testGetSetResourceManager()
     {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $resourceManager = new \Zend\Cache\Storage\Adapter\RedisResourceManager();
-        $options = new \Zend\Cache\Storage\Adapter\RedisOptions();
+        $resourceManager = new Cache\Storage\Adapter\MongoDBResourceManager();
+        $options = new Cache\Storage\Adapter\MongoDBOptions();
         $options->setResourceManager($resourceManager);
         $this->assertInstanceOf(
-            'Zend\\Cache\\Storage\\Adapter\\RedisResourceManager',
+            'Zend\\Cache\\Storage\\Adapter\\MongoDBResourceManager',
             $options->getResourceManager(),
-            'Wrong resource manager retuned, it should of type RedisResourceManager'
+            'Wrong resource manager retuned, it should of type MongoDBResourceManager'
         );
 
         $this->assertEquals($resourceManager, $options->getResourceManager());
@@ -304,12 +280,53 @@ class MongoDBTest extends CommonAdapterTest
 
     public function testGetSetResourceId()
     {
-        $this->markTestSkipped("Skipped by FooBar");
-
         $resourceId = '1';
-        $options = new \Zend\Cache\Storage\Adapter\RedisOptions();
+        $options = new Cache\Storage\Adapter\MongoDBOptions();
         $options->setResourceId($resourceId);
-        $this->assertEquals($resourceId, $options->getResourceId(), 'Resource id was not set correctly');
+        $this->assertEquals($resourceId, $options->getResourceId(), 'Resource id was not set correctly through MongoDBOptions');
+    }
+
+    public function testGetSetServers()
+    {
+        $servers[] = array(
+            'host' => '127.0.0.1',
+            'port' => 27017,
+        );
+        $this->_options->setServers($servers);
+
+        $actual = $this->_options->getServers();
+        $this->assertCount(1, $actual, 'Servers count differs from what was set');
+        $actual = array_values($actual)[0];
+        $this->assertEquals($servers[0]['host'], $actual['host'], 'Server host differs from what was set');
+        $this->assertEquals($servers[0]['port'], $actual['port'], 'Server port differs from what was set');
+    }
+
+    public function testOptionsGetSetDatabase()
+    {
+        $database = 'foobar';
+        $this->_options->setDb($database);
+        $this->assertEquals($database, $this->_options->getDb(), 'Database not set correctly through MongoDBOptions');
+    }
+
+    public function testGetSetNamespace()
+    {
+        $namespace = 'testNamespace';
+        $this->_options->setNamespace($namespace);
+        $this->assertEquals($namespace, $this->_options->getNamespace(), 'Namespace was not set correctly through MongoDBOptions');
+    }
+
+    public function testOptionsGetSetUsername()
+    {
+        $username = 'my-username';
+        $this->_options->setUsername($username);
+        $this->assertEquals($username, $this->_options->getUsername(), 'Username was set incorrectly through MongoDBOptions');
+    }
+
+    public function testOptionsGetSetPassword()
+    {
+        $password = 'my-secret';
+        $this->_options->setPassword($password);
+        $this->assertEquals($password, $this->_options->getPassword(), 'Password was set incorrectly through MongoDBOptions');
     }
 
     public function testGetSetPersistentId()
@@ -320,45 +337,4 @@ class MongoDBTest extends CommonAdapterTest
         $this->_options->setPersistentId($persistentId);
         $this->assertEquals($persistentId, $this->_options->getPersistentId(), 'Persistent id was not set correctly');
     }
-
-    public function testOptionsGetSetLibOptions()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $options = array('serializer', RedisResource::SERIALIZER_PHP);
-        $this->_options->setLibOptions($options);
-        $this->assertEquals($options, $this->_options->getLibOptions(), 'Lib Options were not set correctly through RedisOptions');
-    }
-
-    public function testGetSetServer()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $server = array(
-            'host' => '127.0.0.1',
-            'port' => 6379,
-            'timeout' => 0,
-        );
-        $this->_options->setServer($server);
-        $this->assertEquals($server, $this->_options->getServer(), 'Server was not set correctly through RedisOptions');
-    }
-
-    public function testOptionsGetSetDatabase()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $database = 1;
-        $this->_options->setDatabase($database);
-        $this->assertEquals($database, $this->_options->getDatabase(), 'Database not set correctly using RedisOptions');
-    }
-
-    public function testOptionsGetSetPassword()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $password = 'my-secret';
-        $this->_options->setPassword($password);
-        $this->assertEquals($password, $this->_options->getPassword(), 'Password was set incorrectly using RedisOptions');
-    }
-
 }

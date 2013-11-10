@@ -193,8 +193,12 @@ class MongoDBResourceManager
         $uri = null;
 
         foreach ($resource['servers'] as $server) {
-            $host = $server['host'] . ':' . $server['port'];
-            $uri .= ($uri != null) ? ',' . $host : $proto . $host;
+            if ($server['socket'] === false) {
+                $host = $server['host'] . ':' . $server['port'];
+                $uri .= ($uri != null) ? ',' . $host : $proto . $host;
+            } else {
+                $uri = $proto . $server['socket'];
+            }
         }
 
         return new MongoDBResource($uri, $resource['client_options']);
@@ -207,6 +211,7 @@ class MongoDBResourceManager
      * One server in the list can be descripted as follows:
      * - Assoc: array('host' => <host>[, 'port' => <port>])
      * - List:  array(<host>[, <port>])
+     * - Unix Domain Socket: <socket> (e.g.: '/tmp/mongodb-27017.sock')
      *
      * @param string       $resourceId
      * @param string|array $servers
@@ -605,7 +610,11 @@ class MongoDBResourceManager
 
         foreach ($servers as $server) {
             $this->normalizeServer($server);
-            $result[$server['host'] . ':' . $server['port']] = $server;
+            if ($server['socket'] === false){
+                $result[$server['host'] . ':' . $server['port']] = $server;
+            } else {
+                $result[$server['socket']] = $server;
+            }
         }
 
         $servers = array_values($result);
@@ -621,6 +630,7 @@ class MongoDBResourceManager
     {
         $host = static::$defaultServer['host'];
         $port = static::$defaultServer['port'];
+        $socket = false;
 
         // convert a single server into an array
         if ($server instanceof Traversable) {
@@ -639,11 +649,16 @@ class MongoDBResourceManager
                 $host = (string) $server['host'];
                 $port = isset($server['port']) ? (int) $server['port'] : $port;
             }
+        } elseif (strpos($server, '/') === 0) {
+            $host = null;
+            $port = null;
+            $socket = $server;
         }
 
         $server = array(
             'host' => $host,
             'port' => $port,
+            'socket' => $socket,
         );
     }
 }

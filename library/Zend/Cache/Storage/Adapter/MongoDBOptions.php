@@ -132,14 +132,14 @@ class MongoDBOptions extends AdapterOptions
 
     public function setDB($db)
     {
-        $this->getResourceManager()->setDB($this->getResourceId(), $db);
+        $this->getResourceManager()->setDb($this->getResourceId(), $db);
 
         return $this;
     }
 
     public function getDB()
     {
-        return $this->getResourceManager()->getDB($this->getResourceId());
+        return $this->getResourceManager()->getDb($this->getResourceId());
     }
 
     public function setCollection($collection)

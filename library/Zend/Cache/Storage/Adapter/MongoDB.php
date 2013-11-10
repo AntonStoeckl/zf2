@@ -111,8 +111,8 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         $mongoCollection = $this->getMongoDatabase()
             ->selectCollection($this->resourceManager->getCollection($this->resourceId));
 
-        $mongoCollection->ensureIndex(array('uid' => 1, 'unique' => true));
-        $mongoCollection->ensureIndex(array('expire' => 1, 'expireAfterSeconds' => 0), array('sparse' => true));
+        $mongoCollection->ensureIndex(array('uid' => 1), array('unique' => true));
+        $mongoCollection->ensureIndex(array('expire' => 1), array('expireAfterSeconds' => 0, 'sparse' => true));
 
         return $mongoCollection;
     }
@@ -356,7 +356,11 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
             $data['expire'] = new \MongoDate(time() + $ttl);
         }
 
-        $result = $mongoc->insert( $data, $options);
+        try {
+            $result = $mongoc->insert($data, $options);
+        } catch (\MongoCursorException $exception) {
+            return false;
+        }
 
         if (true !== $result) {
             $this->checkResult($result);

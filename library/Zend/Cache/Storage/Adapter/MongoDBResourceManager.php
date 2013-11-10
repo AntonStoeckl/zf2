@@ -255,11 +255,11 @@ class MongoDBResourceManager
 
         $resource = & $this->resources[$resourceId];
 
-        if ($resource instanceof MongoDBResource) {
+        if ($resource['client'] instanceof MongoDBResource) {
             /**
              * @link http://php.net/manual/mongoclient.gethosts.php
              */
-            return $resource->getHosts();
+            return $resource['client']->getHosts();
         }
 
         return $resource['servers'];

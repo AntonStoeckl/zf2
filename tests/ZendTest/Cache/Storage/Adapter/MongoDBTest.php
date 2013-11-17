@@ -230,6 +230,21 @@ class MongoDBTest extends CommonAdapterTest
         );
     }
 
+    public function testUsernamePasswordAcceptsValidCredentials()
+    {
+        $this->markTestIncomplete("Incomplete by FooBar");
+    }
+
+    public function testUsernamePasswordFailsWithInvalidCredentials()
+    {
+        $this->markTestIncomplete("Incomplete by FooBar");
+    }
+
+    public function testGetSetOthers()
+    {
+        $this->markTestIncomplete("Incomplete by FooBar");
+    }
+
 
     /* MongoDBOptions */
 
@@ -296,6 +311,11 @@ class MongoDBTest extends CommonAdapterTest
         $password = 'my-secret';
         $this->_options->setPassword($password);
         $this->assertEquals($password, $this->_options->getPassword(), 'Password was set incorrectly through MongoDBOptions');
+    }
+
+    public function testGetSetOtherOptions()
+    {
+        $this->markTestIncomplete("Incomplete by FooBar");
     }
 
     public function testGetSetPersistentId()

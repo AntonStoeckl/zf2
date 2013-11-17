@@ -298,10 +298,12 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
 
         $data = array(
             'uid' => $normalizedKey,
-            'value' => $value
+            'value' => $value,
+            'mtime' => new \MongoDate(time()),
         );
 
         $ttl = (int) $this->getOptions()->getTtl();
+        $data['ttl'] = $ttl;
 
         if ($ttl > 0) {
             $data['expire'] = new \MongoDate(time() + $ttl);
@@ -332,10 +334,12 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
 
         $data = array(
             'uid' => $normalizedKey,
-            'value' => $value
+            'value' => $value,
+            'mtime' => new \MongoDate(time()),
         );
 
         $ttl = (int) $this->getOptions()->getTtl();
+        $data['ttl'] = $ttl;
 
         if ($ttl > 0) {
             $data['expire'] = new \MongoDate(time() + $ttl);
@@ -400,6 +404,39 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
         return $notRemovedKeys;
     }
 
+    /**
+     * Internal method to get metadata of an item.
+     *
+     * @param  string $normalizedKey
+     * @return array|bool Metadata on success, false on failure
+     * @throws Exception\ExceptionInterface
+     */
+    protected function internalGetMetadata(& $normalizedKey)
+    {
+        $mongoc = $this->getMongoCollection();
+
+        $data = $mongoc->findOne(
+            array('uid' => $normalizedKey),
+            array('_id' => true, 'mtime' => true, 'ttl' => true)
+        );
+
+        if ($data === null || $this->isNotExpired($data) === false) {
+            return false;
+        }
+
+        /** @var \MongoId $mongoId */
+        $mongoId = $data['_id'];
+
+        $result = array(
+            'internal_key' => $mongoId,
+            'ctime'        => $mongoId->getTimestamp(),
+            'mtime'        => $data['mtime']->sec,
+            'ttl'          => $data['ttl'],
+        );
+
+        return $result;
+    }
+
     /* status */
 
     /**
@@ -427,8 +464,9 @@ class MongoDB extends AbstractAdapter implements FlushableInterface
                     ),
                     'supportedMetadata' => array(
                         'internal_key',
-                        'atime', 'ctime', 'mtime', 'rtime',
-                        'size', 'hits', 'ttl',
+                        'ctime',
+                        'mtime',
+                        'ttl',
                     ),
                     'minTtl'             => 1,
                     'maxTtl'             => 0,

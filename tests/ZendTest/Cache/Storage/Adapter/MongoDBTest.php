@@ -45,19 +45,7 @@ class MongoDBTest extends CommonAdapterTest
                     : 'zfcache'
         ));
 
-        if (defined('TESTS_ZEND_CACHE_MONGODB_HOST') && defined('TESTS_ZEND_CACHE_MONGODB_PORT')) {
-            $this->_options->getResourceManager()
-                ->setServers(
-                    __CLASS__,
-                    array('host' => TESTS_ZEND_CACHE_MONGODB_HOST, 'port' => TESTS_ZEND_CACHE_MONGODB_PORT)
-                );
-        } elseif (defined('TESTS_ZEND_CACHE_MONGODB_HOST')) {
-            $this->_options->getResourceManager()
-                ->setServers(
-                    __CLASS__,
-                    array('host' => TESTS_ZEND_CACHE_MONGODB_HOST)
-                );
-        }
+        $this->setUpHostAndPortOptions();
 
         if (defined('TESTS_ZEND_CACHE_MONGODB_DATABASE')) {
             $this->_options->getResourceManager()
@@ -67,18 +55,7 @@ class MongoDBTest extends CommonAdapterTest
                 );
         }
 
-        if (defined('TESTS_ZEND_CACHE_MONGODB_USERNAME') && defined('TESTS_ZEND_CACHE_MONGODB_PASSWORD')) {
-            $this->_options->getResourceManager()
-                ->setUsername(
-                    __CLASS__,
-                    TESTS_ZEND_CACHE_MONGODB_USERNAME
-                );
-            $this->_options->getResourceManager()
-                ->setPassword(
-                    __CLASS__,
-                    TESTS_ZEND_CACHE_MONGODB_PASSWORD
-                );
-        }
+        $this->setUpCredentialOptions();
 
         $this->_storage = new Cache\Storage\Adapter\MongoDB();
 
@@ -99,7 +76,53 @@ class MongoDBTest extends CommonAdapterTest
         parent::tearDown();
     }
 
+    /*
+     * Host and Port Option.
+     */
+    protected function setUpHostAndPortOptions()
+    {
+        if (defined('TESTS_ZEND_CACHE_MONGODB_HOST') && defined('TESTS_ZEND_CACHE_MONGODB_PORT')) {
+            $this->_options->getResourceManager()
+                ->setServers(
+                    __CLASS__,
+                    array('host' => TESTS_ZEND_CACHE_MONGODB_HOST, 'port' => TESTS_ZEND_CACHE_MONGODB_PORT)
+                );
+        } elseif (defined('TESTS_ZEND_CACHE_MONGODB_HOST')) {
+            $this->_options->getResourceManager()
+                ->setServers(
+                    __CLASS__,
+                    array('host' => TESTS_ZEND_CACHE_MONGODB_HOST)
+                );
+        }
+    }
+
+    /*
+     * Username and Passwort Option.
+     */
+    protected function setUpCredentialOptions()
+    {
+        if (defined('TESTS_ZEND_CACHE_MONGODB_ENABLED') && TESTS_ZEND_CACHE_MONGODB_ENABLED) {
+            if (defined('TESTS_ZEND_CACHE_MONGODB_USERNAME') && defined('TESTS_ZEND_CACHE_MONGODB_PASSWORD')) {
+                $this->_options->getResourceManager()
+                    ->setUsername(
+                        __CLASS__,
+                        TESTS_ZEND_CACHE_MONGODB_USERNAME
+                    );
+                $this->_options->getResourceManager()
+                    ->setPassword(
+                        __CLASS__,
+                        TESTS_ZEND_CACHE_MONGODB_PASSWORD
+                    );
+            }
+        }
+    }
+
     /* MongoDB Storage */
+
+    public function testUsernamePasswordFailsWithInvalidCredentials()
+    {
+        $this->markTestIncomplete("Incomplete by FooBar");
+    }
 
     public function testMongoCacheStoreSuccessCase()
     {
@@ -204,8 +227,15 @@ class MongoDBTest extends CommonAdapterTest
         $databaseName = 'foobar';
         $resourceManager = $this->_options->getResourceManager();
         $resourceManager->setDb($this->_options->getResourceId(), $databaseName);
-        $this->assertNull($this->_storage->getItem('key'), 'No value should be found because set was done on different database than get');
-        $this->assertEquals($databaseName, $resourceManager->getDb($this->_options->getResourceId()), 'Incorrect database was returned');
+        $this->assertNull(
+            $this->_storage->getItem('key'),
+            'No value should be found because set was done on different database than get'
+        );
+        $this->assertEquals(
+            $databaseName,
+            $resourceManager->getDb($this->_options->getResourceId()),
+            'Incorrect database was returned'
+        );
     }
 
     public function testGetSetUsername()
@@ -228,16 +258,6 @@ class MongoDBTest extends CommonAdapterTest
             $this->_options->getResourceManager()->getPassword($this->_options->getResourceId()),
             'Password was not correctly set'
         );
-    }
-
-    public function testUsernamePasswordAcceptsValidCredentials()
-    {
-        $this->markTestIncomplete("Incomplete by FooBar");
-    }
-
-    public function testUsernamePasswordFailsWithInvalidCredentials()
-    {
-        $this->markTestIncomplete("Incomplete by FooBar");
     }
 
     public function testGetSetOthers()
@@ -267,7 +287,11 @@ class MongoDBTest extends CommonAdapterTest
         $resourceId = '1';
         $options = new Cache\Storage\Adapter\MongoDBOptions();
         $options->setResourceId($resourceId);
-        $this->assertEquals($resourceId, $options->getResourceId(), 'Resource id was not set correctly through MongoDBOptions');
+        $this->assertEquals(
+            $resourceId,
+            $options->getResourceId(),
+            'Resource id was not set correctly through MongoDBOptions'
+        );
     }
 
     public function testGetSetServers()
@@ -296,34 +320,37 @@ class MongoDBTest extends CommonAdapterTest
     {
         $namespace = 'testNamespace';
         $this->_options->setNamespace($namespace);
-        $this->assertEquals($namespace, $this->_options->getNamespace(), 'Namespace was not set correctly through MongoDBOptions');
+        $this->assertEquals(
+            $namespace,
+            $this->_options->getNamespace(),
+            'Namespace was not set correctly through MongoDBOptions'
+        );
     }
 
     public function testOptionsGetSetUsername()
     {
         $username = 'my-username';
         $this->_options->setUsername($username);
-        $this->assertEquals($username, $this->_options->getUsername(), 'Username was set incorrectly through MongoDBOptions');
+        $this->assertEquals(
+            $username,
+            $this->_options->getUsername(),
+            'Username was set incorrectly through MongoDBOptions'
+        );
     }
 
     public function testOptionsGetSetPassword()
     {
         $password = 'my-secret';
         $this->_options->setPassword($password);
-        $this->assertEquals($password, $this->_options->getPassword(), 'Password was set incorrectly through MongoDBOptions');
+        $this->assertEquals(
+            $password,
+            $this->_options->getPassword(),
+            'Password was set incorrectly through MongoDBOptions'
+        );
     }
 
     public function testGetSetOtherOptions()
     {
         $this->markTestIncomplete("Incomplete by FooBar");
-    }
-
-    public function testGetSetPersistentId()
-    {
-        $this->markTestSkipped("Skipped by FooBar");
-
-        $persistentId = '1';
-        $this->_options->setPersistentId($persistentId);
-        $this->assertEquals($persistentId, $this->_options->getPersistentId(), 'Persistent id was not set correctly');
     }
 }

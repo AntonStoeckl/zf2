@@ -76,7 +76,7 @@ class MongoDBTest extends CommonAdapterTest
         parent::tearDown();
     }
 
-    /*
+    /**
      * Host and Port Option.
      */
     protected function setUpHostAndPortOptions()
@@ -96,12 +96,12 @@ class MongoDBTest extends CommonAdapterTest
         }
     }
 
-    /*
+    /**
      * Username and Passwort Option.
      */
     protected function setUpCredentialOptions()
     {
-        if (defined('TESTS_ZEND_CACHE_MONGODB_ENABLED') && TESTS_ZEND_CACHE_MONGODB_ENABLED) {
+        if (defined('TESTS_ZEND_CACHE_MONGODB_AUTH_ENABLED') && TESTS_ZEND_CACHE_MONGODB_AUTH_ENABLED) {
             if (defined('TESTS_ZEND_CACHE_MONGODB_USERNAME') && defined('TESTS_ZEND_CACHE_MONGODB_PASSWORD')) {
                 $this->_options->getResourceManager()
                     ->setUsername(
@@ -120,7 +120,7 @@ class MongoDBTest extends CommonAdapterTest
     /* MongoDB Storage */
 
     /**
-     * @expectedException \MongoConnectionException
+     * @expectedException \Zend\Cache\Exception\RuntimeException
      */
     public function testUsernamePasswordFailsWithInvalidCredentials()
     {
@@ -251,7 +251,7 @@ class MongoDBTest extends CommonAdapterTest
         $this->assertTrue($this->_storage->setItem('key', 'val'));
         $this->assertEquals('val', $this->_storage->getItem('key'));
 
-        $databaseName = 'zfcache_unittest2';
+        $databaseName = 'zf2cache_unittest2';
         $resourceManager = $this->_options->getResourceManager();
         $resourceManager->setDb($this->_options->getResourceId(), $databaseName);
         $this->assertNull(
@@ -335,14 +335,14 @@ class MongoDBTest extends CommonAdapterTest
 
     public function testOptionsGetSetDatabase()
     {
-        $database = 'zfcache_unittest2';
+        $database = 'zf2cache_unittest2';
         $this->_options->setDb($database);
         $this->assertEquals($database, $this->_options->getDb(), 'Database not set correctly through MongoDBOptions');
     }
 
     public function testGetSetNamespace()
     {
-        $namespace = 'zfcache_unittest2';
+        $namespace = 'zf2cache_unittest2';
         $this->_options->setNamespace($namespace);
         $this->assertEquals(
             $namespace,

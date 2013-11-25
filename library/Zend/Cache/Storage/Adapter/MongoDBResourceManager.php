@@ -186,6 +186,7 @@ class MongoDBResourceManager
      *
      * @param array $resource
      * @return array
+     * @throws Exception\RuntimeException
      */
     protected function getMongoClient(array $resource)
     {
@@ -201,7 +202,11 @@ class MongoDBResourceManager
             }
         }
 
-        return new MongoDBResource($uri, $resource['client_options']);
+        try {
+            return new MongoDBResource($uri, $resource['client_options']);
+        } catch (\Exception $exception) {
+            throw new Exception\RuntimeException($exception->getMessage());
+        }
     }
 
     /**

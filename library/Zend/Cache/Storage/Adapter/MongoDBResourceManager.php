@@ -260,13 +260,6 @@ class MongoDBResourceManager
 
         $resource = & $this->resources[$resourceId];
 
-        if ($resource['client'] instanceof MongoDBResource) {
-            /**
-             * @link http://php.net/manual/mongoclient.gethosts.php
-             */
-            return $resource['client']->getHosts();
-        }
-
         return $resource['servers'];
     }
 
@@ -287,6 +280,10 @@ class MongoDBResourceManager
 
         if (($result = $this->validateClientOption('collection', $collection) !== true)) {
             $collection = $result;
+        }
+
+        if (preg_match('/^\d+$/', $collection)) {
+            $collection = 'c_' . $collection;
         }
 
         $resource = & $this->resources[$resourceId];

@@ -119,9 +119,19 @@ class MongoDBTest extends CommonAdapterTest
 
     /* MongoDB Storage */
 
+    /**
+     * @expectedException \MongoConnectionException
+     */
     public function testUsernamePasswordFailsWithInvalidCredentials()
     {
-        $this->markTestIncomplete("Incomplete by FooBar");
+        $user = 'foo';
+        $this->_options->getResourceManager()->setUsername($this->_options->getResourceId(), $user);
+
+        $pass = 'wrong';
+        $this->_options->getResourceManager()->setPassword($this->_options->getResourceId(), $pass);
+
+        $key = 'key';
+        $this->_storage->setItem($key, '123.12');
     }
 
     public function testMongoCacheStoreSuccessCase()
@@ -204,17 +214,34 @@ class MongoDBTest extends CommonAdapterTest
         $this->assertEquals($value, $this->_storage->getItem($key), 'Problem with storing / retreiving an array');
     }
 
+    public function testSocketConnectionSuccessCase()
+    {
+        $servers = array('/tmp/mongodb-27017.sock');
+        $this->_options->getResourceManager()->setServers($this->_options->getResourceId(), $servers);
+
+        $key = 'key';
+        $this->assertTrue($this->_storage->setItem($key, 'foobar'));
+        $this->assertEquals(
+            'foobar',
+            $this->_storage->getItem($key),
+            'Problem with storing / retrieving via socket connection'
+        );
+    }
+
 
     /* ResourceManager */
 
-    public function testSocketConnection()
+    public function testGetSetSocketConnection()
     {
         $servers = array('/tmp/mongodb-27017.sock');
         $this->_options->getResourceManager()->setServers($this->_options->getResourceId(), $servers);
         $normalized = $this->_options->getResourceManager()->getServers($this->_options->getResourceId());
         $normalized = array_values($normalized)[0];
-        $this->assertEquals('127.0.0.1', $normalized['host'], 'Host should be 127.0.0.1 on socket connection');
-        $this->assertEquals('27017', $normalized['port'], 'Port should be 27017 on socket connection');
+        $this->assertEquals(
+            '/tmp/mongodb-27017.sock',
+            $normalized['socket'],
+            'Host should be 127.0.0.1 on socket connection'
+        );
 
         $this->_storage = null;
     }
@@ -224,7 +251,7 @@ class MongoDBTest extends CommonAdapterTest
         $this->assertTrue($this->_storage->setItem('key', 'val'));
         $this->assertEquals('val', $this->_storage->getItem('key'));
 
-        $databaseName = 'foobar';
+        $databaseName = 'zfcache_unittest2';
         $resourceManager = $this->_options->getResourceManager();
         $resourceManager->setDb($this->_options->getResourceId(), $databaseName);
         $this->assertNull(
@@ -238,20 +265,17 @@ class MongoDBTest extends CommonAdapterTest
         );
     }
 
-    public function testGetSetUsername()
+    public function testGetSetUsernameAndPassword()
     {
-        $user = 'super user';
+        $user = 'fizz';
         $this->_options->getResourceManager()->setUsername($this->_options->getResourceId(), $user);
         $this->assertEquals(
             $user,
             $this->_options->getResourceManager()->getUsername($this->_options->getResourceId()),
             'Username was not correctly set'
         );
-    }
 
-    public function testGetSetPassword()
-    {
-        $pass = 'super secret';
+        $pass = 'buzz';
         $this->_options->getResourceManager()->setPassword($this->_options->getResourceId(), $pass);
         $this->assertEquals(
             $pass,
@@ -311,14 +335,14 @@ class MongoDBTest extends CommonAdapterTest
 
     public function testOptionsGetSetDatabase()
     {
-        $database = 'foobar';
+        $database = 'zfcache_unittest2';
         $this->_options->setDb($database);
         $this->assertEquals($database, $this->_options->getDb(), 'Database not set correctly through MongoDBOptions');
     }
 
     public function testGetSetNamespace()
     {
-        $namespace = 'testNamespace';
+        $namespace = 'zfcache_unittest2';
         $this->_options->setNamespace($namespace);
         $this->assertEquals(
             $namespace,
@@ -327,20 +351,17 @@ class MongoDBTest extends CommonAdapterTest
         );
     }
 
-    public function testOptionsGetSetUsername()
+    public function testOptionsGetSetUsernameAndPassword()
     {
-        $username = 'my-username';
+        $username = 'fizz';
         $this->_options->setUsername($username);
         $this->assertEquals(
             $username,
             $this->_options->getUsername(),
             'Username was set incorrectly through MongoDBOptions'
         );
-    }
 
-    public function testOptionsGetSetPassword()
-    {
-        $password = 'my-secret';
+        $password = 'buzz';
         $this->_options->setPassword($password);
         $this->assertEquals(
             $password,

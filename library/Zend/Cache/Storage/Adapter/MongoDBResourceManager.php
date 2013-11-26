@@ -202,11 +202,7 @@ class MongoDBResourceManager
             }
         }
 
-        try {
-            return new MongoDBResource($uri, $resource['client_options']);
-        } catch (\Exception $exception) {
-            throw new Exception\RuntimeException($exception->getMessage());
-        }
+        return new MongoDBResource($uri, $resource['client_options']);
     }
 
     /**

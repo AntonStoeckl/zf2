@@ -65,18 +65,6 @@ class MongoDBTest extends CommonAdapterTest
     }
 
     /**
-     * Tear down.
-     */
-    public function tearDown()
-    {
-        if ($this->_storage) {
-            $this->_storage->flush();
-        }
-
-        parent::tearDown();
-    }
-
-    /**
      * Host and Port Option.
      */
     protected function setUpHostAndPortOptions()
@@ -117,13 +105,18 @@ class MongoDBTest extends CommonAdapterTest
         }
     }
 
+
     /* MongoDB Storage */
 
     /**
-     * @expectedException \Zend\Cache\Exception\RuntimeException
+     * @expectedException \MongoConnectionException
      */
     public function testUsernamePasswordFailsWithInvalidCredentials()
     {
+        if (! defined('TESTS_ZEND_CACHE_MONGODB_AUTH_ENABLED') || !TESTS_ZEND_CACHE_MONGODB_AUTH_ENABLED) {
+            $this->markTestSkipped("Skipped by TestConfiguration (TESTS_ZEND_CACHE_MONGODB_AUTH_ENABLED)");
+        }
+
         $user = 'foo';
         $this->_options->getResourceManager()->setUsername($this->_options->getResourceId(), $user);
 
